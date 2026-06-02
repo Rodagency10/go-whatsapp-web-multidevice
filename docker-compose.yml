@@ -1,19 +1,22 @@
 services:
-  whatsapp_go:
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "200k"
-        max-file: "10"
-    build:
-      context: .
-      dockerfile: ./docker/golang.Dockerfile
-    restart: "on-failure"
+  whatsapp:
+    image: ghcr.io/rodagency10/go-whatsapp-web-multidevice:latest
+    restart: always
     ports:
-      - "3000:3000"
-    env_file:
-      - src/.env
+      - "3080:3080"
     volumes:
-      # Persist WhatsApp + chat DBs; entrypoint chowns for gowauser (uid 20001, gid 20000) on start.
-      - ./storages:/app/storages
-      - ./statics:/app/statics
+      - whatsapp:/app/storages
+    command:
+      - rest
+      - --basic-auth=${WA_USER}:${WA_PASSWORD}
+      - --port=3080
+      - --debug=false
+      - --os=Chrome
+      - --account-validation=false
+      - --auto-mark-read=true
+    environment:
+      - WA_USER=${WA_USER:-admin}
+      - WA_PASSWORD=${WA_PASSWORD:-changeme}
+
+volumes:
+  whatsapp:
