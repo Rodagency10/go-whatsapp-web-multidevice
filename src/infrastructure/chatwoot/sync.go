@@ -269,7 +269,7 @@ func (s *SyncService) syncMessage(
 		return fmt.Errorf("failed to create message: %w", err)
 	}
 
-	MarkMessageAsSent(s.client.DeviceID, msgID)
+	MarkMessageAsSent(s.client.WADeviceID, msgID)
 
 	return nil
 }
@@ -381,7 +381,6 @@ func getExtensionForMediaType(mediaType, filename string) string {
 var (
 	globalSyncService     *SyncService
 	globalSyncServiceOnce sync.Once
-	globalRegistry        *ClientRegistry
 )
 
 // GetSyncService returns a shared sync service instance
@@ -398,11 +397,6 @@ func GetSyncService(
 // GetDefaultSyncService returns the global sync service if initialized
 func GetDefaultSyncService() *SyncService {
 	return globalSyncService
-}
-
-// SetGlobalRegistry sets the client registry for the global sync service.
-func SetGlobalRegistry(registry *ClientRegistry) {
-	globalRegistry = registry
 }
 
 // GetSyncServiceForDevice returns a sync service configured for a specific device.

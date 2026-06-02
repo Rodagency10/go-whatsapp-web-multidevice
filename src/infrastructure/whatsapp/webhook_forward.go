@@ -424,7 +424,7 @@ func syncMessageToChatwoot(cw *chatwoot.Client, info *chatwootContactInfo, conte
 	if err != nil {
 		return fmt.Errorf("failed to create message: %w", err)
 	}
-	chatwoot.MarkMessageAsSent(cw.DeviceID, msgID)
+	chatwoot.MarkMessageAsSent(cw.WADeviceID, msgID)
 
 	logrus.Infof("Chatwoot: Message synced successfully for %s", info.Identifier)
 	return nil

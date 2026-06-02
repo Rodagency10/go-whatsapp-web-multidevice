@@ -22,7 +22,7 @@ import (
 )
 
 type Client struct {
-	DeviceID   string // WhatsApp device_id for dedup tracking
+	WADeviceID string // WhatsApp device_id for dedup tracking
 	BaseURL    string
 	APIToken   string
 	AccountID  int
@@ -31,6 +31,9 @@ type Client struct {
 }
 
 var (
+	defaultClient     *Client
+	defaultClientOnce sync.Once
+
 	// sentMessageIDs tracks Chatwoot message IDs created by our API per-device to prevent
 	// echo loops: WhatsApp msg → synced to Chatwoot → Chatwoot webhook fires →
 	// would re-send to WhatsApp without this guard.
@@ -138,11 +141,11 @@ func NewClient() *Client {
 // NewClientFromConfig creates a Chatwoot client from a per-device configuration.
 func NewClientFromConfig(cfg *domainChatStorage.ChatwootConfig) *Client {
 	return &Client{
-		DeviceID:  cfg.DeviceID,
-		BaseURL:   strings.TrimRight(cfg.ChatwootURL, "/"),
-		APIToken:  cfg.APIToken,
-		AccountID: cfg.AccountID,
-		InboxID:   cfg.InboxID,
+		WADeviceID: cfg.DeviceID,
+		BaseURL:    strings.TrimRight(cfg.ChatwootURL, "/"),
+		APIToken:   cfg.APIToken,
+		AccountID:  cfg.AccountID,
+		InboxID:    cfg.InboxID,
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -155,7 +158,7 @@ func (c *Client) IsConfigured() bool {
 
 // DeviceID returns the WhatsApp device_id associated with this client.
 func (c *Client) DeviceID() string {
-	return c.DeviceID
+	return c.WADeviceID
 }
 
 func (c *Client) FindContactByIdentifier(identifier string, isGroup bool) (*Contact, error) {

@@ -416,7 +416,7 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 		})
 	}
 
-	deviceID := cwClient.DeviceID
+	deviceID := cwClient.WADeviceID
 	instance, resolvedID, err := h.DeviceManager.ResolveDevice(deviceID)
 	if err != nil {
 		logrus.Errorf("Chatwoot Webhook: Failed to resolve device %s: %v", deviceID, err)
