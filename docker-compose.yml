@@ -1,6 +1,6 @@
 services:
   whatsapp:
-    image: ghcr.io/rodagency10/go-whatsapp-web-multidevice:latest
+    image: ghcr.io/rodagency10/go-whatsapp-web-multidevice:dev
     restart: always
     ports:
       - "${WA_PORT:-3080}:3080"
