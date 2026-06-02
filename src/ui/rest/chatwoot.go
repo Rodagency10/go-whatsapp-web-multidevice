@@ -395,11 +395,6 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusOK)
 	}
 
-	if chatwoot.IsMessageSentByUs(deviceID, payload.ID) {
-		logrus.Debugf("Chatwoot Webhook: Skipping echo message %d (created by our API)", payload.ID)
-		return c.SendStatus(fiber.StatusOK)
-	}
-
 	// Lookup device by inbox_id from webhook payload
 	if payload.Conversation.InboxID == 0 {
 		logrus.Warn("Chatwoot Webhook: inbox_id not found in webhook payload")
@@ -417,6 +412,12 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 	}
 
 	deviceID := cwClient.WADeviceID
+
+	if chatwoot.IsMessageSentByUs(deviceID, payload.ID) {
+		logrus.Debugf("Chatwoot Webhook: Skipping echo message %d (created by our API)", payload.ID)
+		return c.SendStatus(fiber.StatusOK)
+	}
+
 	instance, resolvedID, err := h.DeviceManager.ResolveDevice(deviceID)
 	if err != nil {
 		logrus.Errorf("Chatwoot Webhook: Failed to resolve device %s: %v", deviceID, err)
