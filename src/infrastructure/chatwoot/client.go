@@ -16,11 +16,13 @@ import (
 	"time"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
+	domainChatStorage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 
 type Client struct {
+	DeviceID   string // WhatsApp device_id for dedup tracking
 	BaseURL    string
 	APIToken   string
 	AccountID  int
@@ -29,18 +31,17 @@ type Client struct {
 }
 
 var (
-	defaultClient     *Client
-	defaultClientOnce sync.Once
-
-	// sentMessageIDs tracks Chatwoot message IDs created by our API to prevent
+	// sentMessageIDs tracks Chatwoot message IDs created by our API per-device to prevent
 	// echo loops: WhatsApp msg → synced to Chatwoot → Chatwoot webhook fires →
 	// would re-send to WhatsApp without this guard.
-	sentMessageIDs    sync.Map
+	sentMessageIDs    = make(map[string]*sync.Map) // key = device_id
+	sentMessageIDsMu  sync.RWMutex
 	sentMessageIDsTTL = 5 * time.Minute
 )
 
 // GetDefaultClient returns a shared Chatwoot client instance.
-// Uses lazy initialization with sync.Once for thread safety.
+// Deprecated: Use ClientRegistry.GetClient instead.
+// Kept for backward compatibility during migration.
 func GetDefaultClient() *Client {
 	defaultClientOnce.Do(func() {
 		defaultClient = NewClient()
@@ -48,29 +49,52 @@ func GetDefaultClient() *Client {
 	return defaultClient
 }
 
-func MarkMessageAsSent(messageID int) {
+// getSentMessageIDs returns the sync.Map for tracking sent messages for a device.
+func getSentMessageIDs(deviceID string) *sync.Map {
+	sentMessageIDsMu.RLock()
+	m, ok := sentMessageIDs[deviceID]
+	sentMessageIDsMu.RUnlock()
+	if ok {
+		return m
+	}
+
+	sentMessageIDsMu.Lock()
+	defer sentMessageIDsMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if m, ok = sentMessageIDs[deviceID]; ok {
+		return m
+	}
+
+	m = &sync.Map{}
+	sentMessageIDs[deviceID] = m
+	return m
+}
+
+// MarkMessageAsSent registers a Chatwoot message ID as sent by our API for a specific device.
+func MarkMessageAsSent(deviceID string, messageID int) {
 	if messageID == 0 {
 		return
 	}
-	sentMessageIDs.Store(messageID, time.Now())
+	m := getSentMessageIDs(deviceID)
+	m.Store(messageID, time.Now())
 }
 
-func IsMessageSentByUs(messageID int) bool {
+// IsMessageSentByUs checks if a Chatwoot message ID was created by our API for a specific device.
+func IsMessageSentByUs(deviceID string, messageID int) bool {
 	if messageID == 0 {
 		return false
 	}
-	val, ok := sentMessageIDs.Load(messageID)
+	m := getSentMessageIDs(deviceID)
+	val, ok := m.Load(messageID)
 	if !ok {
 		return false
 	}
 	storedAt := val.(time.Time)
 	if time.Since(storedAt) > sentMessageIDsTTL {
-		sentMessageIDs.Delete(messageID)
+		m.Delete(messageID)
 		return false
 	}
-	// Don't delete on check — Chatwoot may fire multiple webhook events
-	// (e.g. message_created + conversation_updated) for the same message.
-	// Entries are cleaned up by the background sweeper after TTL expires.
 	return true
 }
 
@@ -79,12 +103,22 @@ func init() {
 		ticker := time.NewTicker(sentMessageIDsTTL)
 		defer ticker.Stop()
 		for range ticker.C {
-			sentMessageIDs.Range(func(key, value any) bool {
-				if time.Since(value.(time.Time)) > sentMessageIDsTTL {
-					sentMessageIDs.Delete(key)
-				}
-				return true
-			})
+			sentMessageIDsMu.RLock()
+			deviceIDs := make([]string, 0, len(sentMessageIDs))
+			for id := range sentMessageIDs {
+				deviceIDs = append(deviceIDs, id)
+			}
+			sentMessageIDsMu.RUnlock()
+
+			for _, deviceID := range deviceIDs {
+				m := getSentMessageIDs(deviceID)
+				m.Range(func(key, value any) bool {
+					if time.Since(value.(time.Time)) > sentMessageIDsTTL {
+						m.Delete(key)
+					}
+					return true
+				})
+			}
 		}
 	}()
 }
@@ -101,8 +135,27 @@ func NewClient() *Client {
 	}
 }
 
+// NewClientFromConfig creates a Chatwoot client from a per-device configuration.
+func NewClientFromConfig(cfg *domainChatStorage.ChatwootConfig) *Client {
+	return &Client{
+		DeviceID:  cfg.DeviceID,
+		BaseURL:   strings.TrimRight(cfg.ChatwootURL, "/"),
+		APIToken:  cfg.APIToken,
+		AccountID: cfg.AccountID,
+		InboxID:   cfg.InboxID,
+		HTTPClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
 func (c *Client) IsConfigured() bool {
 	return c.BaseURL != "" && c.APIToken != "" && c.AccountID != 0 && c.InboxID != 0
+}
+
+// DeviceID returns the WhatsApp device_id associated with this client.
+func (c *Client) DeviceID() string {
+	return c.DeviceID
 }
 
 func (c *Client) FindContactByIdentifier(identifier string, isGroup bool) (*Contact, error) {

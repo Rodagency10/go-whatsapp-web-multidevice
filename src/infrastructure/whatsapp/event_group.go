@@ -71,7 +71,7 @@ func forwardGroupInfoToWebhook(ctx context.Context, evt *events.GroupInfo, devic
 		if len(action.jids) > 0 {
 			payload := createGroupInfoPayload(ctx, evt, action.actionType, action.jids, deviceID, client)
 
-			if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "group.participants"); err != nil {
+			if err := forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), payload, "group.participants"); err != nil {
 				logrus.Warnf("Failed to forward group %s event to webhook: %v", action.actionType, err)
 			}
 		}
@@ -124,5 +124,5 @@ func forwardJoinedGroupToWebhook(ctx context.Context, evt *events.JoinedGroup, d
 		body["device_id"] = deviceID
 	}
 
-	return forwardPayloadToConfiguredWebhooks(ctx, body, "group.joined")
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), body, "group.joined")
 }

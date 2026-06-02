@@ -29,6 +29,12 @@ func DeviceFromContext(ctx context.Context) (*DeviceInstance, bool) {
 	return nil, false
 }
 
+// InstanceFromContext retrieves a device instance from context, returning nil if not present.
+func InstanceFromContext(ctx context.Context) *DeviceInstance {
+	inst, _ := DeviceFromContext(ctx)
+	return inst
+}
+
 // ClientFromContext returns the client stored in the device context.
 // If a device was explicitly set in context but has no client (not logged in), returns nil.
 // Only falls back to global client when no device was set in context (backward compatibility).

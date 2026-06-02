@@ -9,6 +9,7 @@ The Chatwoot integration allows you to:
 - Reply to WhatsApp messages directly from Chatwoot
 - Support text messages, images, audio, video, and file attachments
 - Handle both individual chats and group conversations
+- **Multi-device support**: Configure different Chatwoot inboxes per WhatsApp device
 
 ## Prerequisites
 
@@ -16,61 +17,96 @@ Before setting up the integration, ensure you have:
 
 1. **Go WhatsApp Web Multidevice** running and accessible via a public URL
 2. **Chatwoot** instance (self-hosted or cloud) with admin access
-3. **API Channel** inbox created in Chatwoot
+3. **API Channel** inbox created in Chatwoot for each WhatsApp device
 4. At least one WhatsApp device connected and logged in
+
+## Architecture
+
+### Multi-Device Model
+
+Each WhatsApp device can have its own Chatwoot configuration:
+
+```
+Device "business" (628xxx@s.whatsapp.net)
+  └─ Chatwoot: URL, token, account_id=1, inbox_id=1
+
+Device "support" (629yyy@s.whatsapp.net)
+  └─ Chatwoot: URL, token, account_id=1, inbox_id=2
+
+Device "personal" (627zzz@s.whatsapp.net)
+  └─ Chatwoot: URL, token, account_id=2, inbox_id=3
+```
+
+### Message Flow
+
+1. **Incoming (WhatsApp → Chatwoot)**:
+   - WhatsApp message received by connected device
+   - Event handler processes the message
+   - Message forwarded to Chatwoot API using the device's configured client
+   - Contact/conversation created if needed
+   - Message appears in the correct Chatwoot inbox
+
+2. **Outgoing (Chatwoot → WhatsApp)**:
+   - Agent replies in Chatwoot
+   - Chatwoot sends webhook to `/chatwoot/webhook`
+   - Handler resolves device from `inbox_id` in webhook payload
+   - Message sent via WhatsApp using the resolved device
+   - Delivery confirmed
 
 ## Configuration
 
-### Environment Variables
+### Via REST API
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `CHATWOOT_ENABLED` | Yes | `false` | Enable Chatwoot integration |
-| `CHATWOOT_URL` | Yes | - | Your Chatwoot instance URL (e.g., `https://app.chatwoot.com`) |
-| `CHATWOOT_API_TOKEN` | Yes | - | API access token from Chatwoot |
-| `CHATWOOT_ACCOUNT_ID` | Yes | - | Your Chatwoot account ID |
-| `CHATWOOT_INBOX_ID` | Yes | - | The inbox ID for WhatsApp messages |
-| `CHATWOOT_DEVICE_ID` | No | - | Specific device ID for outbound messages (required for multi-device setups) |
-| `CHATWOOT_IMPORT_MESSAGES` | No | `false` | Enable message history sync to Chatwoot |
-| `CHATWOOT_DAYS_LIMIT_IMPORT_MESSAGES` | No | `3` | Number of days of history to import |
+Configure Chatwoot per device using the REST API:
 
-### Configuration Examples
-
-**Environment File (.env):**
+**Save Configuration:**
 ```bash
-CHATWOOT_ENABLED=true
-CHATWOOT_URL=https://app.chatwoot.com
-CHATWOOT_API_TOKEN=your_api_token_here
-CHATWOOT_ACCOUNT_ID=12345
-CHATWOOT_INBOX_ID=67890
-CHATWOOT_DEVICE_ID=my-whatsapp-device
-
-# Optional: History sync settings
-CHATWOOT_IMPORT_MESSAGES=true
-CHATWOOT_DAYS_LIMIT_IMPORT_MESSAGES=7
+curl -X PUT "http://your-api:3000/devices/{device_id}/chatwoot" \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Id: {device_id}" \
+  -d '{
+    "chatwoot_url": "https://app.chatwoot.com",
+    "api_token": "your_api_token_here",
+    "account_id": 1,
+    "inbox_id": 1,
+    "enabled": true
+  }'
 ```
 
-**CLI Flags:**
+**Get Configuration:**
 ```bash
-./whatsapp rest \
-  --chatwoot-enabled=true \
-  --chatwoot-device-id="my-device-id"
+curl "http://your-api:3000/devices/{device_id}/chatwoot" \
+  -H "X-Device-Id: {device_id}"
 ```
 
-**Docker Compose:**
-```yaml
-services:
-  whatsapp-api:
-    image: aldinokemal2104/go-whatsapp-web-multidevice:latest
-    environment:
-      - CHATWOOT_ENABLED=true
-      - CHATWOOT_URL=https://app.chatwoot.com
-      - CHATWOOT_API_TOKEN=your_api_token
-      - CHATWOOT_ACCOUNT_ID=12345
-      - CHATWOOT_INBOX_ID=67890
-      - CHATWOOT_DEVICE_ID=my-device
-    command: rest
+**Delete Configuration:**
+```bash
+curl -X DELETE "http://your-api:3000/devices/{device_id}/chatwoot" \
+  -H "X-Device-Id: {device_id}"
 ```
+
+### Via Web UI
+
+1. Open the WhatsApp API web interface
+2. Select or create a device
+3. Scroll to the **Integrations** section
+4. Click **Configure Chatwoot**
+5. Fill in the required fields:
+   - **Chatwoot URL**: Your Chatwoot instance URL
+   - **API Token**: From Chatwoot Profile Settings → Access Token
+   - **Account ID**: From Chatwoot URL `/app/accounts/{ID}/dashboard`
+   - **Inbox ID**: From Chatwoot Inbox settings
+6. Click **Save**
+
+### Configuration Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `chatwoot_url` | Yes | Your Chatwoot instance URL (e.g., `https://app.chatwoot.com`) |
+| `api_token` | Yes | API access token from Chatwoot Profile Settings |
+| `account_id` | Yes | Your Chatwoot account ID (visible in URL) |
+| `inbox_id` | Yes | The API inbox ID for this device |
+| `enabled` | No | Toggle Chatwoot integration on/off (default: true) |
 
 ## Chatwoot Setup
 
@@ -81,10 +117,12 @@ services:
 3. Click **Add Inbox**
 4. Select **API** as the channel type
 5. Configure the inbox:
-   - **Name**: WhatsApp (or any descriptive name)
+   - **Name**: WhatsApp - Business (or any descriptive name)
    - **Webhook URL**: Leave empty for now (we'll configure this in Step 4)
 6. Click **Create Inbox**
 7. Note down the **Inbox ID** (visible in the URL or inbox settings)
+
+> **Note**: Create one inbox per WhatsApp device you want to integrate.
 
 ### Step 2: Get Your API Token
 
@@ -110,60 +148,18 @@ https://app.chatwoot.com/app/accounts/[ACCOUNT_ID]/dashboard
 
 > **Important:** The webhook URL must be publicly accessible. If you're running locally, use a tunneling service like ngrok.
 
-## Multi-Device Setup
-
-When running with multiple WhatsApp devices, you **must** specify which device should handle Chatwoot outbound messages using `CHATWOOT_DEVICE_ID`.
-
-### Finding Your Device ID
-
-1. Access your WhatsApp API at `http://your-api:3000`
-2. Navigate to the device management section
-3. Note the Device ID of the device you want to use for Chatwoot
-
-Alternatively, use the API:
-```bash
-curl http://your-api:3000/devices
-```
-
-### Configuration
-
-```bash
-# Using JID format
-CHATWOOT_DEVICE_ID=628123456789@s.whatsapp.net
-
-# Or using custom device ID
-CHATWOOT_DEVICE_ID=my-support-device
-```
-
-### Important Notes
-
-- If `CHATWOOT_DEVICE_ID` is **not set** and **only one device** is registered, that device will be used automatically
-- If `CHATWOOT_DEVICE_ID` is **not set** and **multiple devices** exist, outbound messages will **fail**
-- If the specified device is not found or not connected, outbound messages will fail with a `DEVICE_NOT_AVAILABLE` error
-
 ## Message History Sync
 
-The history sync feature allows you to import existing WhatsApp message history into Chatwoot. This is useful when you want to have context from past conversations when starting to use Chatwoot.
+The history sync feature allows you to import existing WhatsApp message history into Chatwoot.
 
-### Enabling Auto-Sync
-
-To automatically sync history when a device connects:
-
-```bash
-CHATWOOT_IMPORT_MESSAGES=true
-CHATWOOT_DAYS_LIMIT_IMPORT_MESSAGES=7  # Sync last 7 days
-```
-
-### Manual Sync via API
-
-You can trigger a sync manually using the REST API:
+### Via REST API
 
 **Start Sync:**
 ```bash
-curl -X POST "http://your-api:3000/chatwoot/sync" \
+curl -X POST "http://your-api:3000/devices/{device_id}/chatwoot/sync" \
   -H "Content-Type: application/json" \
+  -H "X-Device-Id: {device_id}" \
   -d '{
-    "device_id": "my-device-id",
     "days_limit": 7,
     "include_media": true,
     "include_groups": true
@@ -172,8 +168,19 @@ curl -X POST "http://your-api:3000/chatwoot/sync" \
 
 **Check Sync Status:**
 ```bash
-curl "http://your-api:3000/chatwoot/sync/status?device_id=my-device-id"
+curl "http://your-api:3000/devices/{device_id}/chatwoot/sync/status" \
+  -H "X-Device-Id: {device_id}"
 ```
+
+### Via Web UI
+
+1. Go to the **Integrations** section
+2. Click **Sync History** on the configured device
+3. Configure sync options:
+   - Days of history to sync
+   - Include media attachments
+   - Include group chats
+4. Click **Start Sync**
 
 ### Sync Options
 
@@ -182,14 +189,6 @@ curl "http://your-api:3000/chatwoot/sync/status?device_id=my-device-id"
 | `days_limit` | 3 | Number of days of history to import |
 | `include_media` | true | Download and sync media attachments |
 | `include_groups` | true | Include group chat messages |
-
-### How It Works
-
-1. **Reads stored messages** from the local chat storage database
-2. **Creates contacts** in Chatwoot for each chat participant
-3. **Creates conversations** for each chat
-4. **Imports messages** with timestamps, preserving chronological order
-5. **Downloads and attaches media** (if enabled and media is still available)
 
 ### Notes
 
@@ -233,50 +232,38 @@ curl "http://your-api:3000/chatwoot/sync/status?device_id=my-device-id"
 - Replies go to the correct group chat
 - Group messages include sender name prefix
 
-## Architecture
+## API Reference
 
-```
-┌─────────────────────┐         ┌──────────────────────┐
-│   WhatsApp User     │         │      Chatwoot        │
-│                     │         │                      │
-└─────────┬───────────┘         └───────────┬──────────┘
-          │                                 │
-          │ Incoming                        │ Outgoing
-          │ Message                         │ Message
-          ▼                                 ▼
-┌─────────────────────────────────────────────────────────┐
-│            Go WhatsApp Web Multidevice                  │
-│                                                         │
-│  ┌─────────────────┐     ┌─────────────────────────┐   │
-│  │ Event Handler   │     │  /chatwoot/webhook      │   │
-│  │ (Message Event) │     │  (POST endpoint)        │   │
-│  └────────┬────────┘     └───────────┬─────────────┘   │
-│           │                          │                  │
-│           │ Forward to               │ Resolve Device   │
-│           │ Chatwoot API             │ & Send Message   │
-│           ▼                          ▼                  │
-│  ┌─────────────────┐     ┌─────────────────────────┐   │
-│  │ Chatwoot Client │     │  Device Manager         │   │
-│  │ (Create Message)│     │  (CHATWOOT_DEVICE_ID)   │   │
-│  └─────────────────┘     └─────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-```
+### Chatwoot Configuration Endpoints
 
-### Message Flow
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/devices/{device_id}/chatwoot` | GET | Get Chatwoot config for device |
+| `/devices/{device_id}/chatwoot` | PUT | Create/update Chatwoot config |
+| `/devices/{device_id}/chatwoot` | DELETE | Delete Chatwoot config |
+| `/devices/{device_id}/chatwoot/sync` | POST | Start history sync |
+| `/devices/{device_id}/chatwoot/sync/status` | GET | Get sync status |
 
-1. **Incoming (WhatsApp → Chatwoot)**:
-   - WhatsApp message received by connected device
-   - Event handler processes the message
-   - Message forwarded to Chatwoot API
-   - Contact/conversation created if needed
-   - Message appears in Chatwoot inbox
+### Webhook Endpoint
 
-2. **Outgoing (Chatwoot → WhatsApp)**:
-   - Agent replies in Chatwoot
-   - Chatwoot sends webhook to `/chatwoot/webhook`
-   - Handler resolves device from `CHATWOOT_DEVICE_ID` or default
-   - Message sent via WhatsApp
-   - Delivery confirmed
+**URL:** `POST /chatwoot/webhook`
+
+**Headers:**
+- `Content-Type: application/json`
+
+**Request Body:** Standard Chatwoot webhook payload (must include `conversation.inbox_id`)
+
+**Response Codes:**
+- `200 OK` - Message processed (or skipped)
+- `503 Service Unavailable` - No device configured for the inbox_id
+
+### Related Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/devices` | GET | List all registered devices |
+| `/devices/{id}` | GET | Get device details |
+| `/devices/{id}/status` | GET | Check device connection status |
 
 ## Troubleshooting
 
@@ -286,10 +273,10 @@ curl "http://your-api:3000/chatwoot/sync/status?device_id=my-device-id"
 
 **Possible Causes & Solutions:**
 
-1. **Device not specified or not found**
-   - Check logs for "Failed to resolve device" errors
-   - Ensure `CHATWOOT_DEVICE_ID` is set correctly
-   - Verify the device is registered: `curl http://your-api:3000/devices`
+1. **Device not configured for inbox**
+   - Check logs for "No device configured for inbox_id" errors
+   - Ensure the device has a Chatwoot configuration with the correct `inbox_id`
+   - Verify via API: `curl http://your-api:3000/devices/{device_id}/chatwoot`
 
 2. **Webhook not configured**
    - Verify the webhook URL in Chatwoot settings
@@ -300,21 +287,19 @@ curl "http://your-api:3000/chatwoot/sync/status?device_id=my-device-id"
    - Check device status: `curl http://your-api:3000/devices/{device_id}/status`
    - Reconnect the device if disconnected
 
-4. **CHATWOOT_ENABLED not set**
-   - Verify `CHATWOOT_ENABLED=true` in your configuration
-
 ### Incoming Messages Not Appearing in Chatwoot
 
 **Symptoms:** WhatsApp messages are not showing in Chatwoot inbox
 
 **Possible Causes & Solutions:**
 
-1. **Chatwoot not enabled**
-   - Verify `CHATWOOT_ENABLED=true` in configuration
+1. **Chatwoot not configured for device**
+   - Verify the device has a Chatwoot configuration
+   - Check `enabled` is set to `true`
 
 2. **Invalid API credentials**
-   - Double-check `CHATWOOT_API_TOKEN`
-   - Verify `CHATWOOT_ACCOUNT_ID` and `CHATWOOT_INBOX_ID`
+   - Double-check `api_token`
+   - Verify `account_id` and `inbox_id`
 
 3. **Contact/Conversation issues**
    - Check API logs for contact creation errors
@@ -340,14 +325,15 @@ APP_DEBUG=true ./whatsapp rest
 Look for log entries starting with:
 - `Chatwoot Webhook:` - Webhook processing
 - `Chatwoot:` - API operations (contact/conversation/message creation)
+- `[CHATWOOT_REGISTRY]` - Client registry operations
 
 ### Common Error Messages
 
 | Error | Meaning | Solution |
 |-------|---------|----------|
-| `DEVICE_NOT_AVAILABLE` | No device found for sending | Set `CHATWOOT_DEVICE_ID` or ensure one device is registered |
+| `DEVICE_NOT_AVAILABLE` | No device configured for inbox_id | Configure Chatwoot for the device with correct inbox_id |
+| `No Chatwoot config found for inbox_id` | Webhook inbox_id not mapped to any device | Check inbox_id matches the configured value |
 | `device not found` | Specified device ID doesn't exist | Check device ID spelling and registration |
-| `device id is required` | No device ID and multiple devices exist | Set `CHATWOOT_DEVICE_ID` |
 | `failed to create contact` | Chatwoot API error | Verify API token and account permissions |
 | `Invalid payload` | Malformed webhook request | Check Chatwoot webhook configuration |
 
@@ -365,6 +351,7 @@ curl -X POST https://your-api.com/chatwoot/webhook \
     "private": false,
     "conversation": {
       "id": 1,
+      "inbox_id": 1,
       "meta": {
         "sender": {
           "id": 1,
@@ -379,42 +366,19 @@ Expected response: `200 OK` or error with details
 
 ## Best Practices
 
-1. **Use a dedicated device** for Chatwoot integration in production
+1. **Use dedicated inboxes** for each WhatsApp device
 2. **Set up monitoring** for device connection status
 3. **Configure auto-reconnect** to maintain service availability
 4. **Test webhook connectivity** before going live
 5. **Use HTTPS** for webhook URLs in production
-6. **Set `CHATWOOT_DEVICE_ID`** explicitly in multi-device environments
-7. **Monitor logs** for failed message deliveries
+6. **Monitor logs** for failed message deliveries
+7. **Use the web UI** for easy per-device configuration
 
 ## Security Considerations
 
-- Keep `CHATWOOT_API_TOKEN` secure and rotate periodically
+- Keep API tokens secure and rotate periodically
 - Use HTTPS for all webhook communications
 - Consider network-level restrictions on the webhook endpoint
 - Monitor for unusual activity in Chatwoot logs
 - Use strong authentication for the WhatsApp API (`APP_BASIC_AUTH`)
-- **Note:** The `/chatwoot/webhook` endpoint is excluded from basic auth to allow Chatwoot to send webhooks without credentials. The `/chatwoot/sync` endpoints require authentication.
-
-## API Reference
-
-### Webhook Endpoint
-
-**URL:** `POST /chatwoot/webhook`
-
-**Headers:**
-- `Content-Type: application/json`
-
-**Request Body:** Standard Chatwoot webhook payload
-
-**Response Codes:**
-- `200 OK` - Message processed (or skipped)
-- `503 Service Unavailable` - No device available
-
-### Related Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/devices` | GET | List all registered devices |
-| `/devices/{id}` | GET | Get device details |
-| `/devices/{id}/status` | GET | Check device connection status |
+- **Note:** The `/chatwoot/webhook` endpoint is excluded from basic auth to allow Chatwoot to send webhooks without credentials. The configuration and sync endpoints require authentication.

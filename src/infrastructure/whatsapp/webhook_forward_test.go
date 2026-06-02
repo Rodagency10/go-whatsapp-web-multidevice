@@ -24,7 +24,7 @@ func TestForwardPayloadToConfiguredWebhooks_NoWebhooksConfigured(t *testing.T) {
 	}
 	defer func() { submitWebhookFn = originalSubmit }()
 
-	if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "test"); err != nil {
+	if err := forwardPayloadToConfiguredWebhooks(ctx, nil, payload, "test"); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 }
@@ -48,7 +48,7 @@ func TestForwardPayloadToConfiguredWebhooks_PartialFailure(t *testing.T) {
 	}
 	defer func() { submitWebhookFn = originalSubmit }()
 
-	if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "test"); err != nil {
+	if err := forwardPayloadToConfiguredWebhooks(ctx, nil, payload, "test"); err != nil {
 		t.Fatalf("expected partial failure to return nil, got %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestForwardPayloadToConfiguredWebhooks_AllFail(t *testing.T) {
 	}
 	defer func() { submitWebhookFn = originalSubmit }()
 
-	if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "test"); err == nil {
+	if err := forwardPayloadToConfiguredWebhooks(ctx, nil, payload, "test"); err == nil {
 		t.Fatalf("expected error when all webhooks fail")
 	}
 }
@@ -97,7 +97,7 @@ func TestForwardPayloadToConfiguredWebhooks_EventWhitelist_FilteredOut(t *testin
 	}
 	defer func() { submitWebhookFn = originalSubmit }()
 
-	if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "message.ack"); err != nil {
+	if err := forwardPayloadToConfiguredWebhooks(ctx, nil, payload, "message.ack"); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	if called {
@@ -126,7 +126,7 @@ func TestForwardPayloadToConfiguredWebhooks_EventWhitelist_Allowed(t *testing.T)
 	}
 	defer func() { submitWebhookFn = originalSubmit }()
 
-	if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "message"); err != nil {
+	if err := forwardPayloadToConfiguredWebhooks(ctx, nil, payload, "message"); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	if !called {
@@ -155,7 +155,7 @@ func TestForwardPayloadToConfiguredWebhooks_EmptyWhitelist_AllowsAll(t *testing.
 	}
 	defer func() { submitWebhookFn = originalSubmit }()
 
-	if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "any.event"); err != nil {
+	if err := forwardPayloadToConfiguredWebhooks(ctx, nil, payload, "any.event"); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	if !called {
@@ -184,10 +184,10 @@ func TestForwardPayloadToConfiguredWebhooks_WhitelistCaseInsensitive(t *testing.
 	}
 	defer func() { submitWebhookFn = originalSubmit }()
 
-	if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "message"); err != nil {
+	if err := forwardPayloadToConfiguredWebhooks(ctx, nil, payload, "message"); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if err := forwardPayloadToConfiguredWebhooks(ctx, payload, "message.ack"); err != nil {
+	if err := forwardPayloadToConfiguredWebhooks(ctx, nil, payload, "message.ack"); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	if called != 2 {

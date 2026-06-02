@@ -71,9 +71,9 @@ func getContactMutex(phone string) *sync.Mutex {
 // forwardPayloadToConfiguredWebhooks attempts to deliver the provided payload to every configured webhook URL.
 // It only returns an error when all webhook deliveries fail. Partial failures are logged and suppressed so
 // successful targets still receive the event.
-func forwardPayloadToConfiguredWebhooks(ctx context.Context, payload map[string]any, eventName string) error {
+func forwardPayloadToConfiguredWebhooks(ctx context.Context, instance *DeviceInstance, payload map[string]any, eventName string) error {
 	webhookAllowed := len(config.WhatsappWebhookEvents) == 0 || isEventWhitelisted(eventName)
-	chatwootAllowed := config.ChatwootEnabled && shouldForwardEventToChatwoot(eventName) && isEventWhitelistedForChatwoot(eventName)
+	chatwootAllowed := shouldForwardEventToChatwoot(eventName) && isEventWhitelistedForChatwoot(eventName)
 
 	if !webhookAllowed && !chatwootAllowed {
 		logrus.Debugf("Skipping event %s - not allowed for webhooks or Chatwoot", eventName)
@@ -87,8 +87,8 @@ func forwardPayloadToConfiguredWebhooks(ctx context.Context, payload map[string]
 		logrus.Debugf("Skipping event %s for configured webhooks, but allowing Chatwoot", eventName)
 	}
 
-	if chatwootAllowed {
-		go forwardToChatwoot(ctx, payload, eventName)
+	if chatwootAllowed && instance != nil {
+		go forwardToChatwoot(ctx, instance, payload, eventName)
 	}
 
 	return err
@@ -424,17 +424,24 @@ func syncMessageToChatwoot(cw *chatwoot.Client, info *chatwootContactInfo, conte
 	if err != nil {
 		return fmt.Errorf("failed to create message: %w", err)
 	}
-	chatwoot.MarkMessageAsSent(msgID)
+	chatwoot.MarkMessageAsSent(cw.DeviceID, msgID)
 
 	logrus.Infof("Chatwoot: Message synced successfully for %s", info.Identifier)
 	return nil
 }
 
-func forwardToChatwoot(ctx context.Context, payload map[string]any, eventName string) {
-	logrus.Infof("Chatwoot: Attempting to forward %s...", eventName)
-	cw := chatwoot.GetDefaultClient()
-	if !cw.IsConfigured() {
-		logrus.Warn("Chatwoot: Client is not configured (check CHATWOOT_* env vars)")
+func forwardToChatwoot(ctx context.Context, instance *DeviceInstance, payload map[string]any, eventName string) {
+	deviceID := instance.ID()
+
+	logrus.Infof("Chatwoot: Attempting to forward %s for device %s...", eventName, deviceID)
+
+	cwClient, err := chatwoot.GetClientForDevice(deviceID)
+	if err != nil {
+		logrus.Debugf("Chatwoot: No client for device %s: %v", deviceID, err)
+		return
+	}
+	if !cwClient.IsConfigured() {
+		logrus.Debugf("Chatwoot: Client not configured for device %s", deviceID)
 		return
 	}
 
@@ -465,7 +472,7 @@ func forwardToChatwoot(ctx context.Context, payload map[string]any, eventName st
 	info.IsFromMe = chatwootMessageTypeFromPayload(data) == "outgoing"
 
 	// Sync to Chatwoot
-	if err := syncMessageToChatwoot(cw, info, content, attachments); err != nil {
+	if err := syncMessageToChatwoot(cwClient, info, content, attachments); err != nil {
 		logrus.Errorf("Chatwoot: %v", err)
 	}
 }

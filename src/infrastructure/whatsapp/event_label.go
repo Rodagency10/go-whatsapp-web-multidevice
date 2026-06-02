@@ -41,7 +41,7 @@ func forwardLabelAppStateToWebhook(ctx context.Context, evt *events.AppState, de
 		body["device_id"] = deviceID
 	}
 
-	return forwardPayloadToConfiguredWebhooks(ctx, body, eventName)
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), body, eventName)
 }
 
 func buildLabelAppStatePayload(ctx context.Context, evt *events.AppState, client *whatsmeow.Client) (string, map[string]any) {

@@ -92,7 +92,7 @@ func forwardNewsletterJoinToWebhook(ctx context.Context, evt *events.NewsletterJ
 		body["device_id"] = deviceID
 	}
 
-	return forwardPayloadToConfiguredWebhooks(ctx, body, "newsletter.joined")
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), body, "newsletter.joined")
 }
 
 func forwardNewsletterLeaveToWebhook(ctx context.Context, evt *events.NewsletterLeave, deviceID string) error {
@@ -110,7 +110,7 @@ func forwardNewsletterLeaveToWebhook(ctx context.Context, evt *events.Newsletter
 		body["device_id"] = deviceID
 	}
 
-	return forwardPayloadToConfiguredWebhooks(ctx, body, "newsletter.left")
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), body, "newsletter.left")
 }
 
 func forwardNewsletterLiveUpdateToWebhook(ctx context.Context, evt *events.NewsletterLiveUpdate, deviceID string) error {
@@ -145,7 +145,7 @@ func forwardNewsletterLiveUpdateToWebhook(ctx context.Context, evt *events.Newsl
 		body["device_id"] = deviceID
 	}
 
-	return forwardPayloadToConfiguredWebhooks(ctx, body, "newsletter.message")
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), body, "newsletter.message")
 }
 
 func forwardNewsletterMuteChangeToWebhook(ctx context.Context, evt *events.NewsletterMuteChange, deviceID string) error {
@@ -163,5 +163,5 @@ func forwardNewsletterMuteChangeToWebhook(ctx context.Context, evt *events.Newsl
 		body["device_id"] = deviceID
 	}
 
-	return forwardPayloadToConfiguredWebhooks(ctx, body, "newsletter.mute")
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), body, "newsletter.mute")
 }

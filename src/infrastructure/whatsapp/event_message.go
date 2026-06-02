@@ -54,7 +54,7 @@ func forwardMessageToWebhook(ctx context.Context, client *whatsmeow.Client, evt 
 		"payload":   webhookEvent.Payload,
 	}
 
-	return forwardPayloadToConfiguredWebhooks(ctx, payload, webhookEvent.Event)
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), payload, webhookEvent.Event)
 }
 
 func isReactionMessage(evt *events.Message) bool {

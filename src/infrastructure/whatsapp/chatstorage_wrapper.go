@@ -206,3 +206,23 @@ func (r *deviceChatStorage) GetDeviceRecord(deviceID string) (*domainChatStorage
 func (r *deviceChatStorage) DeleteDeviceRecord(deviceID string) error {
 	return r.base.DeleteDeviceRecord(deviceID)
 }
+
+func (r *deviceChatStorage) SaveChatwootConfig(config *domainChatStorage.ChatwootConfig) error {
+	return r.base.SaveChatwootConfig(config)
+}
+
+func (r *deviceChatStorage) GetChatwootConfig(deviceID string) (*domainChatStorage.ChatwootConfig, error) {
+	return r.base.GetChatwootConfig(deviceID)
+}
+
+func (r *deviceChatStorage) GetChatwootConfigByInboxID(inboxID int) (*domainChatStorage.ChatwootConfig, error) {
+	return r.base.GetChatwootConfigByInboxID(inboxID)
+}
+
+func (r *deviceChatStorage) DeleteChatwootConfig(deviceID string) error {
+	return r.base.DeleteChatwootConfig(deviceID)
+}
+
+func (r *deviceChatStorage) ListChatwootConfigs() ([]*domainChatStorage.ChatwootConfig, error) {
+	return r.base.ListChatwootConfigs()
+}

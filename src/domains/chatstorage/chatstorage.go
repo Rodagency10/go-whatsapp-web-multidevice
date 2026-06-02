@@ -63,6 +63,18 @@ type MediaInfo struct {
 	FileLength    uint64
 }
 
+// ChatwootConfig stores per-device Chatwoot integration settings.
+type ChatwootConfig struct {
+	DeviceID    string    `db:"device_id" json:"device_id"`
+	ChatwootURL string    `db:"chatwoot_url" json:"chatwoot_url"`
+	APIToken    string    `db:"api_token" json:"-"`
+	AccountID   int       `db:"account_id" json:"account_id"`
+	InboxID     int       `db:"inbox_id" json:"inbox_id"`
+	Enabled     bool      `db:"enabled" json:"enabled"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+}
+
 // DeviceRecord tracks a registered device for persistence purposes.
 type DeviceRecord struct {
 	DeviceID    string    `db:"device_id"`

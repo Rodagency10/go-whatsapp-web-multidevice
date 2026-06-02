@@ -216,19 +216,11 @@ To use environment variables:
 | `WHATSAPP_PRESENCE_PULSE_ENABLED`       | Enable daily available/unavailable presence pulse             | `true`                                       | `WHATSAPP_PRESENCE_PULSE_ENABLED=false`       |
 | `WHATSAPP_PRESENCE_PULSE_INTERVAL`      | Interval between presence pulses                              | `24h`                                        | `WHATSAPP_PRESENCE_PULSE_INTERVAL=24h`        |
 | `WHATSAPP_PRESENCE_PULSE_DURATION`      | Duration to stay available during each pulse                  | `5m`                                         | `WHATSAPP_PRESENCE_PULSE_DURATION=5m`         |
-| `CHATWOOT_ENABLED`                      | Enable Chatwoot integration                                   | `false`                                      | `CHATWOOT_ENABLED=true`                       |
-| `CHATWOOT_URL`                          | Chatwoot instance URL                                         | -                                            | `CHATWOOT_URL=https://app.chatwoot.com`       |
-| `CHATWOOT_API_TOKEN`                    | Chatwoot API access token                                     | -                                            | `CHATWOOT_API_TOKEN=your-api-token`           |
-| `CHATWOOT_ACCOUNT_ID`                   | Chatwoot account ID                                           | -                                            | `CHATWOOT_ACCOUNT_ID=12345`                   |
-| `CHATWOOT_INBOX_ID`                     | Chatwoot inbox ID                                             | -                                            | `CHATWOOT_INBOX_ID=67890`                     |
-| `CHATWOOT_DEVICE_ID`                    | WhatsApp device ID for Chatwoot (multi-device setup)          | -                                            | `CHATWOOT_DEVICE_ID=628xxx@s.whatsapp.net`    |
-| `CHATWOOT_IMPORT_MESSAGES`              | Enable message history sync to Chatwoot                       | `false`                                      | `CHATWOOT_IMPORT_MESSAGES=true`               |
-| `CHATWOOT_DAYS_LIMIT_IMPORT_MESSAGES`   | Days of history to import                                     | `3`                                          | `CHATWOOT_DAYS_LIMIT_IMPORT_MESSAGES=7`       |
 
 **Documentation:**
 
 - For detailed webhook payload schemas, security implementation, and integration examples, see [Webhook Payload Documentation](./docs/webhook-payload.md)
-- For comprehensive Chatwoot integration guide, see [Chatwoot Integration Documentation](./docs/chatwoot.md)
+- For comprehensive Chatwoot integration guide (now configured per-device via API/UI), see [Chatwoot Integration Documentation](./docs/chatwoot.md)
 
 Note: Command-line flags will override any values set in environment variables or `.env` file.
 

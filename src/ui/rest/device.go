@@ -7,11 +7,12 @@ import (
 )
 
 type Device struct {
-	Service device.IDeviceUsecase
+	Service        device.IDeviceUsecase
+	ChatwootHandler *ChatwootHandler
 }
 
-func InitRestDevice(app fiber.Router, service device.IDeviceUsecase) Device {
-	rest := Device{Service: service}
+func InitRestDevice(app fiber.Router, service device.IDeviceUsecase, chatwootHandler *ChatwootHandler) Device {
+	rest := Device{Service: service, ChatwootHandler: chatwootHandler}
 
 	app.Get("/devices", rest.ListDevices)
 	app.Post("/devices", rest.AddDevice)
@@ -24,6 +25,13 @@ func InitRestDevice(app fiber.Router, service device.IDeviceUsecase) Device {
 	app.Post("/devices/:device_id/logout", rest.LogoutDevice)
 	app.Post("/devices/:device_id/reconnect", rest.ReconnectDevice)
 	app.Get("/devices/:device_id/status", rest.Status)
+
+	// Chatwoot management routes (device-scoped, outside DeviceMiddleware)
+	app.Get("/devices/:device_id/chatwoot", chatwootHandler.GetConfig)
+	app.Put("/devices/:device_id/chatwoot", chatwootHandler.SaveConfig)
+	app.Delete("/devices/:device_id/chatwoot", chatwootHandler.DeleteConfig)
+	app.Post("/devices/:device_id/chatwoot/sync", chatwootHandler.SyncHistory)
+	app.Get("/devices/:device_id/chatwoot/sync/status", chatwootHandler.SyncStatus)
 
 	return rest
 }

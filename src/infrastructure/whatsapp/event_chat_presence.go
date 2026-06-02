@@ -76,5 +76,5 @@ func createChatPresencePayload(ctx context.Context, evt *events.ChatPresence, de
 // forwardChatPresenceToWebhook forwards chat presence events to the configured webhook URLs.
 func forwardChatPresenceToWebhook(ctx context.Context, evt *events.ChatPresence, deviceID string, client *whatsmeow.Client) error {
 	payload := createChatPresencePayload(ctx, evt, deviceID, client)
-	return forwardPayloadToConfiguredWebhooks(ctx, payload, "chat_presence")
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), payload, "chat_presence")
 }

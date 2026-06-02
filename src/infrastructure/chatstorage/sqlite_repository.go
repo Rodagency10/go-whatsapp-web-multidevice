@@ -901,6 +901,125 @@ func (r *SQLiteRepository) DeleteDeviceRecord(deviceID string) error {
 	return err
 }
 
+// SaveChatwootConfig creates or updates a Chatwoot configuration for a device.
+func (r *SQLiteRepository) SaveChatwootConfig(config *domainChatStorage.ChatwootConfig) error {
+	if config == nil || strings.TrimSpace(config.DeviceID) == "" {
+		return fmt.Errorf("device_id is required")
+	}
+	if config.ChatwootURL == "" {
+		return fmt.Errorf("chatwoot_url is required")
+	}
+	if config.APIToken == "" {
+		return fmt.Errorf("api_token is required")
+	}
+	if config.AccountID <= 0 {
+		return fmt.Errorf("account_id must be positive")
+	}
+	if config.InboxID <= 0 {
+		return fmt.Errorf("inbox_id must be positive")
+	}
+
+	now := time.Now()
+	if config.CreatedAt.IsZero() {
+		config.CreatedAt = now
+	}
+	config.UpdatedAt = now
+
+	result, err := r.db.Exec(`
+		UPDATE chatwoot_configs SET chatwoot_url = ?, api_token = ?, account_id = ?, inbox_id = ?, enabled = ?, updated_at = ?
+		WHERE device_id = ?
+	`, config.ChatwootURL, config.APIToken, config.AccountID, config.InboxID, config.Enabled, config.UpdatedAt, config.DeviceID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		_, err = r.db.Exec(`
+			INSERT INTO chatwoot_configs (device_id, chatwoot_url, api_token, account_id, inbox_id, enabled, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`, config.DeviceID, config.ChatwootURL, config.APIToken, config.AccountID, config.InboxID, config.Enabled, config.CreatedAt, config.UpdatedAt)
+	}
+	return err
+}
+
+// GetChatwootConfig retrieves Chatwoot configuration for a specific device.
+func (r *SQLiteRepository) GetChatwootConfig(deviceID string) (*domainChatStorage.ChatwootConfig, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, fmt.Errorf("device_id is required")
+	}
+
+	config := &domainChatStorage.ChatwootConfig{}
+	err := r.db.QueryRow(`
+		SELECT device_id, chatwoot_url, api_token, account_id, inbox_id, enabled, created_at, updated_at
+		FROM chatwoot_configs
+		WHERE device_id = ?
+		LIMIT 1
+	`, deviceID).Scan(&config.DeviceID, &config.ChatwootURL, &config.APIToken, &config.AccountID, &config.InboxID, &config.Enabled, &config.CreatedAt, &config.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+// GetChatwootConfigByInboxID retrieves Chatwoot configuration by inbox ID for webhook routing.
+func (r *SQLiteRepository) GetChatwootConfigByInboxID(inboxID int) (*domainChatStorage.ChatwootConfig, error) {
+	if inboxID <= 0 {
+		return nil, fmt.Errorf("inbox_id must be positive")
+	}
+
+	config := &domainChatStorage.ChatwootConfig{}
+	err := r.db.QueryRow(`
+		SELECT device_id, chatwoot_url, api_token, account_id, inbox_id, enabled, created_at, updated_at
+		FROM chatwoot_configs
+		WHERE inbox_id = ? AND enabled = 1
+		LIMIT 1
+	`, inboxID).Scan(&config.DeviceID, &config.ChatwootURL, &config.APIToken, &config.AccountID, &config.InboxID, &config.Enabled, &config.CreatedAt, &config.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+// DeleteChatwootConfig removes Chatwoot configuration for a device.
+func (r *SQLiteRepository) DeleteChatwootConfig(deviceID string) error {
+	if strings.TrimSpace(deviceID) == "" {
+		return fmt.Errorf("device_id is required")
+	}
+	_, err := r.db.Exec("DELETE FROM chatwoot_configs WHERE device_id = ?", deviceID)
+	return err
+}
+
+// ListChatwootConfigs returns all Chatwoot configurations.
+func (r *SQLiteRepository) ListChatwootConfigs() ([]*domainChatStorage.ChatwootConfig, error) {
+	rows, err := r.db.Query(`
+		SELECT device_id, chatwoot_url, api_token, account_id, inbox_id, enabled, created_at, updated_at
+		FROM chatwoot_configs
+		ORDER BY created_at ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var configs []*domainChatStorage.ChatwootConfig
+	for rows.Next() {
+		var cfg domainChatStorage.ChatwootConfig
+		if err := rows.Scan(&cfg.DeviceID, &cfg.ChatwootURL, &cfg.APIToken, &cfg.AccountID, &cfg.InboxID, &cfg.Enabled, &cfg.CreatedAt, &cfg.UpdatedAt); err != nil {
+			return nil, err
+		}
+		configs = append(configs, &cfg)
+	}
+
+	return configs, rows.Err()
+}
+
 // GetChatNameWithPushName determines the appropriate name for a chat with pushname support
 func (r *SQLiteRepository) GetChatNameWithPushName(jid types.JID, chatJID string, senderUser string, pushName string) string {
 	// First, check if chat already exists with a name
@@ -1783,5 +1902,21 @@ func (r *SQLiteRepository) getMigrations() []string {
 
 		// Migration 22: Index edit history by edit time
 		`CREATE INDEX IF NOT EXISTS idx_message_edits_edited_at ON message_edits(edited_at)`,
+
+		// Migration 23: Chatwoot per-device configuration
+		`CREATE TABLE IF NOT EXISTS chatwoot_configs (
+			device_id VARCHAR(255) PRIMARY KEY,
+			chatwoot_url TEXT NOT NULL,
+			api_token TEXT NOT NULL,
+			account_id INTEGER NOT NULL,
+			inbox_id INTEGER NOT NULL,
+			enabled BOOLEAN DEFAULT 1,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE
+		)`,
+
+		// Migration 24: Index chatwoot configs by inbox_id for webhook lookup
+		`CREATE INDEX IF NOT EXISTS idx_chatwoot_configs_inbox ON chatwoot_configs(inbox_id)`,
 	}
 }

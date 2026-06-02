@@ -55,6 +55,13 @@ type IChatStorageRepository interface {
 	GetDeviceRecord(deviceID string) (*DeviceRecord, error)
 	DeleteDeviceRecord(deviceID string) error
 
+	// Chatwoot config operations
+	SaveChatwootConfig(config *ChatwootConfig) error
+	GetChatwootConfig(deviceID string) (*ChatwootConfig, error)
+	GetChatwootConfigByInboxID(inboxID int) (*ChatwootConfig, error)
+	DeleteChatwootConfig(deviceID string) error
+	ListChatwootConfigs() ([]*ChatwootConfig, error)
+
 	// Schema operations
 	InitializeSchema() error
 }

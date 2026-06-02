@@ -91,5 +91,5 @@ func createCallOfferPayload(ctx context.Context, evt *events.CallOffer, deviceID
 // forwardCallOfferToWebhook forwards incoming call events to the configured webhook URLs
 func forwardCallOfferToWebhook(ctx context.Context, evt *events.CallOffer, deviceID string, client *whatsmeow.Client, autoRejected bool) error {
 	payload := createCallOfferPayload(ctx, evt, deviceID, client, autoRejected)
-	return forwardPayloadToConfiguredWebhooks(ctx, payload, "call.offer")
+	return forwardPayloadToConfiguredWebhooks(ctx, InstanceFromContext(ctx), payload, "call.offer")
 }

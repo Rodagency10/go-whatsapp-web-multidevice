@@ -21,6 +21,7 @@ import (
 	domainNewsletter "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/newsletter"
 	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
 	domainUser "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/user"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatwoot"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatstorage"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/sqlite"
@@ -36,6 +37,9 @@ import (
 var (
 	EmbedIndex embed.FS
 	EmbedViews embed.FS
+
+	// Context
+	cmdCtx = context.Background()
 
 	// Whatsapp
 	whatsappCli *whatsmeow.Client
@@ -53,6 +57,9 @@ var (
 	groupUsecase      domainGroup.IGroupUsecase
 	newsletterUsecase domainNewsletter.INewsletterUsecase
 	deviceUsecase     domainDevice.IDeviceUsecase
+
+	// Chatwoot
+	cwRegistry *chatwoot.ClientRegistry
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -413,6 +420,11 @@ func initApp() {
 	if dm != nil {
 		_ = dm.LoadExistingDevices(ctx)
 	}
+
+	// Initialize Chatwoot client registry
+	cwRegistry = chatwoot.NewClientRegistry(chatStorageRepo)
+	_ = cwRegistry.LoadAllConfigs(ctx)
+	chatwoot.SetGlobalRegistry(cwRegistry)
 
 	// Usecase
 	appUsecase = usecase.NewAppService(chatStorageRepo, dm)

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/config"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatwoot"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/helpers"
@@ -79,6 +80,13 @@ func restServer(_ *cobra.Command, _ []string) {
 	// Device manager - needed for chatwoot webhook and health check
 	dm := whatsapp.GetDeviceManager()
 
+	// Initialize Chatwoot client registry
+	cwRegistry := chatwoot.NewClientRegistry(chatStorageRepo)
+	_ = cwRegistry.LoadAllConfigs(cmdCtx)
+
+	// Create Chatwoot handler with registry
+	chatwootHandler := rest.NewChatwootHandler(dm, chatStorageRepo, sendUsecase, cwRegistry)
+
 	// Health check endpoint (public, no auth)
 	// Registered at root path (ignoring AppBasePath) to ensure fixed availability
 	// for infrastructure health probes (Kubernetes liveness/readiness, Docker healthcheck, etc.)
@@ -91,14 +99,11 @@ func restServer(_ *cobra.Command, _ []string) {
 
 	// Chatwoot webhook - registered BEFORE basic auth middleware
 	// This allows Chatwoot to send webhooks without authentication
-	if config.ChatwootEnabled {
-		chatwootHandler := rest.NewChatwootHandler(appUsecase, sendUsecase, dm, chatStorageRepo)
-		webhookPath := "/chatwoot/webhook"
-		if config.AppBasePath != "" {
-			webhookPath = config.AppBasePath + webhookPath
-		}
-		app.Post(webhookPath, chatwootHandler.HandleWebhook)
+	webhookPath := "/chatwoot/webhook"
+	if config.AppBasePath != "" {
+		webhookPath = config.AppBasePath + webhookPath
 	}
+	app.Post(webhookPath, chatwootHandler.HandleWebhook)
 
 	if len(config.AppBasicAuthCredential) > 0 {
 		account := make(map[string]string)
@@ -132,19 +137,12 @@ func restServer(_ *cobra.Command, _ []string) {
 		websocket.RegisterRoutes(r, appUsecase)
 	}
 
-	// Device management routes (no device_id required)
-	rest.InitRestDevice(apiGroup, deviceUsecase)
+	// Device management routes + Chatwoot config routes (no device middleware required)
+	rest.InitRestDevice(apiGroup, deviceUsecase, chatwootHandler)
 
 	// Device-scoped operations (header-based)
 	headerDeviceGroup := apiGroup.Group("", middleware.DeviceMiddleware(dm))
 	registerDeviceScopedRoutes(headerDeviceGroup)
-
-	// Chatwoot sync routes - require authentication (webhook is registered earlier without auth)
-	if config.ChatwootEnabled {
-		chatwootHandler := rest.NewChatwootHandler(appUsecase, sendUsecase, dm, chatStorageRepo)
-		apiGroup.Post("/chatwoot/sync", chatwootHandler.SyncHistory)
-		apiGroup.Get("/chatwoot/sync/status", chatwootHandler.SyncStatus)
-	}
 
 	apiGroup.Get("/", func(c *fiber.Ctx) error {
 		return c.Render("views/index", fiber.Map{
