@@ -181,10 +181,14 @@ func (h *ChatwootHandler) SaveConfig(c *fiber.Ctx) error {
 
 	// Register or re-register the client in the registry
 	if enabled {
+		logrus.Infof("Chatwoot: Registering client for device %s (instance.ID=%s, JID=%s)", deviceID, instance.ID(), instance.JID())
 		if err := h.Registry.RegisterClient(c.UserContext(), deviceID); err != nil {
 			logrus.WithError(err).Warnf("Failed to register Chatwoot client for device %s", deviceID)
+		} else {
+			logrus.Infof("Chatwoot: Successfully registered client for device %s", deviceID)
 		}
 	} else {
+		logrus.Infof("Chatwoot: Removing client for device %s", deviceID)
 		h.Registry.RemoveClient(deviceID)
 	}
 

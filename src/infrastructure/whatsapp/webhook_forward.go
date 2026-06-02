@@ -88,7 +88,12 @@ func forwardPayloadToConfiguredWebhooks(ctx context.Context, instance *DeviceIns
 	}
 
 	if chatwootAllowed && instance != nil {
+		logrus.Infof("Chatwoot: Forwarding %s for device %s (instance.ID=%s)", eventName, instance.ID(), instance.ID())
 		go forwardToChatwoot(ctx, instance, payload, eventName)
+	} else if !chatwootAllowed {
+		logrus.Debugf("Chatwoot: Skipping event %s - not a Chatwoot event", eventName)
+	} else if instance == nil {
+		logrus.Warn("Chatwoot: Skipping - instance is nil")
 	}
 
 	return err
@@ -437,11 +442,11 @@ func forwardToChatwoot(ctx context.Context, instance *DeviceInstance, payload ma
 
 	cwClient, err := chatwoot.GetClientForDevice(deviceID)
 	if err != nil {
-		logrus.Debugf("Chatwoot: No client for device %s: %v", deviceID, err)
+		logrus.Warnf("Chatwoot: No client for device %s: %v", deviceID, err)
 		return
 	}
 	if !cwClient.IsConfigured() {
-		logrus.Debugf("Chatwoot: Client not configured for device %s", deviceID)
+		logrus.Warnf("Chatwoot: Client not configured for device %s", deviceID)
 		return
 	}
 
@@ -454,13 +459,13 @@ func forwardToChatwoot(ctx context.Context, instance *DeviceInstance, payload ma
 	// Skip group messages
 	chatID, _ := data["chat_id"].(string)
 	if utils.IsGroupJID(chatID) {
-		logrus.Debugf("Chatwoot: Skipping group message (chat_id=%s)", chatID)
+		logrus.Infof("Chatwoot: Skipping group message (chat_id=%s)", chatID)
 		return
 	}
 
 	// Skip status broadcast messages
 	if chatID == "status@broadcast" {
-		logrus.Debug("Chatwoot: Skipping status broadcast message")
+		logrus.Info("Chatwoot: Skipping status broadcast message")
 		return
 	}
 

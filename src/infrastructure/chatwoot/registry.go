@@ -178,5 +178,9 @@ func GetClientForDevice(deviceID string) (*Client, error) {
 	if globalRegistry == nil {
 		return nil, fmt.Errorf("Chatwoot registry not initialized")
 	}
-	return globalRegistry.GetClient(deviceID)
+	client, err := globalRegistry.GetClient(deviceID)
+	if err != nil {
+		logrus.Warnf("Chatwoot: GetClientForDevice(%s) failed, registered devices: %v", deviceID, globalRegistry.ListRegisteredDevices())
+	}
+	return client, err
 }
