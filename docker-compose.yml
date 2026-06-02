@@ -3,13 +3,13 @@ services:
     image: ghcr.io/rodagency10/go-whatsapp-web-multidevice:latest
     restart: always
     ports:
-      - "3080:3080"
+      - "${WA_PORT:-3080}:3080"
     volumes:
       - whatsapp:/app/storages
     command:
       - rest
       - --basic-auth=${WA_USER}:${WA_PASSWORD}
-      - --port=3080
+      - --port=${WA_PORT:-3080}
       - --debug=false
       - --os=Chrome
       - --account-validation=false
@@ -17,6 +17,7 @@ services:
     environment:
       - WA_USER=${WA_USER:-admin}
       - WA_PASSWORD=${WA_PASSWORD:-changeme}
+
 
 volumes:
   whatsapp:
