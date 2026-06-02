@@ -22,7 +22,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Sanitize branch name
         id: sanitize
-        run: echo "tag=$(echo '${{ github.ref_name }}' | sed 's|/|-|g')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "tag=$(echo '${{ github.ref_name }}' | sed 's|/|-|g')" >> "$GITHUB_OUTPUT"
       - name: Login GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -39,8 +41,8 @@ jobs:
           file: ./docker/golang.Dockerfile
           platforms: linux/amd64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:${{ steps.sanitize.outputs.tag }}
-            ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:dev
+            ghcr.io/${{ steps.sanitize.outputs.owner }}/go-whatsapp-web-multidevice:${{ steps.sanitize.outputs.tag }}
+            ghcr.io/${{ steps.sanitize.outputs.owner }}/go-whatsapp-web-multidevice:dev
 
   # ── Tag push: full multi-arch + manifest ────────────────────────
   build-and-push-amd:
@@ -52,6 +54,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      - name: Lowercase owner
+        id: owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
       - name: Login Registry
         uses: docker/login-action@v3
         with:
@@ -74,7 +79,7 @@ jobs:
           platforms: linux/amd64
           tags: |
             ${{ secrets.REGISTRY_USERNAME }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-amd
-            ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-amd
+            ghcr.io/${{ steps.owner.outputs.value }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-amd
 
   build-and-push-arm:
     if: "startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'"
@@ -96,6 +101,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      - name: Lowercase owner
+        id: owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
       - name: Login Registry
         uses: docker/login-action@v3
         with:
@@ -123,7 +131,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           tags: |
             ${{ secrets.REGISTRY_USERNAME }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-${{ matrix.suffix }}
-            ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-${{ matrix.suffix }}
+            ghcr.io/${{ steps.owner.outputs.value }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-${{ matrix.suffix }}
 
   merge-manifest:
     if: "startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'"
@@ -133,6 +141,9 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Lowercase owner
+        id: owner
+        run: echo "value=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
       - name: Login Registry
         uses: docker/login-action@v3
         with:
@@ -154,10 +165,10 @@ jobs:
             ${{ secrets.REGISTRY_USERNAME }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-armv7
       - name: Create Versioned Manifest (GHCR) (${{ github.ref_name }})
         run: |
-          docker buildx imagetools create -t ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:${{ github.ref_name }} \
-            ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-amd \
-            ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-arm \
-            ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-armv7
+          docker buildx imagetools create -t ghcr.io/${{ steps.owner.outputs.value }}/go-whatsapp-web-multidevice:${{ github.ref_name }} \
+            ghcr.io/${{ steps.owner.outputs.value }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-amd \
+            ghcr.io/${{ steps.owner.outputs.value }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-arm \
+            ghcr.io/${{ steps.owner.outputs.value }}/go-whatsapp-web-multidevice:${{ github.ref_name }}-armv7
       - name: Create Latest Manifest (Docker Hub)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -166,5 +177,5 @@ jobs:
       - name: Create Latest Manifest (GHCR)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          docker buildx imagetools create -t ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:latest \
-            ghcr.io/${{ github.repository_owner }}/go-whatsapp-web-multidevice:${{ github.ref_name }}
+          docker buildx imagetools create -t ghcr.io/${{ steps.owner.outputs.value }}/go-whatsapp-web-multidevice:latest \
+            ghcr.io/${{ steps.owner.outputs.value }}/go-whatsapp-web-multidevice:${{ github.ref_name }}
