@@ -39,3 +39,5 @@ tmp/
 
 # whatsmeow store (legacy path)
 src/whatsapp/
+
+.opencode

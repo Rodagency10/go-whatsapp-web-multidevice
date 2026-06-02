@@ -11,10 +11,11 @@ import (
 
 // ClientRegistry manages per-device Chatwoot client instances.
 type ClientRegistry struct {
-	mu       sync.RWMutex
-	clients  map[string]*Client // key = device_id
-	byInbox  map[int]string     // inbox_id → device_id
-	repo     domainChatStorage.IChatStorageRepository
+	mu      sync.RWMutex
+	clients map[string]*Client // key = device_id (alias)
+	byInbox map[int]string     // inbox_id → device_id
+	byJID   map[string]string  // jid → device_id
+	repo    domainChatStorage.IChatStorageRepository
 	initOnce sync.Once
 }
 
@@ -23,6 +24,7 @@ func NewClientRegistry(repo domainChatStorage.IChatStorageRepository) *ClientReg
 	return &ClientRegistry{
 		clients: make(map[string]*Client),
 		byInbox: make(map[int]string),
+		byJID:   make(map[string]string),
 		repo:    repo,
 	}
 }
