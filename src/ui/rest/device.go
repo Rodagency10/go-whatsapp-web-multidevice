@@ -2,7 +2,9 @@ package rest
 
 import (
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/domains/device"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/ui/rest/middleware"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -11,7 +13,7 @@ type Device struct {
 	ChatwootHandler *ChatwootHandler
 }
 
-func InitRestDevice(app fiber.Router, service device.IDeviceUsecase, chatwootHandler *ChatwootHandler) Device {
+func InitRestDevice(app fiber.Router, service device.IDeviceUsecase, dm *whatsapp.DeviceManager, chatwootHandler *ChatwootHandler) Device {
 	rest := Device{Service: service, ChatwootHandler: chatwootHandler}
 
 	app.Get("/devices", rest.ListDevices)
@@ -26,12 +28,13 @@ func InitRestDevice(app fiber.Router, service device.IDeviceUsecase, chatwootHan
 	app.Post("/devices/:device_id/reconnect", rest.ReconnectDevice)
 	app.Get("/devices/:device_id/status", rest.Status)
 
-	// Chatwoot management routes (device-scoped, outside DeviceMiddleware)
-	app.Get("/devices/:device_id/chatwoot", chatwootHandler.GetConfig)
-	app.Put("/devices/:device_id/chatwoot", chatwootHandler.SaveConfig)
-	app.Delete("/devices/:device_id/chatwoot", chatwootHandler.DeleteConfig)
-	app.Post("/devices/:device_id/chatwoot/sync", chatwootHandler.SyncHistory)
-	app.Get("/devices/:device_id/chatwoot/sync/status", chatwootHandler.SyncStatus)
+	// Chatwoot management routes (device-scoped, requires DeviceMiddleware)
+	chatwootGroup := app.Group("/devices/:device_id", middleware.DeviceMiddleware(dm))
+	chatwootGroup.Get("/chatwoot", chatwootHandler.GetConfig)
+	chatwootGroup.Put("/chatwoot", chatwootHandler.SaveConfig)
+	chatwootGroup.Delete("/chatwoot", chatwootHandler.DeleteConfig)
+	chatwootGroup.Post("/chatwoot/sync", chatwootHandler.SyncHistory)
+	chatwootGroup.Get("/chatwoot/sync/status", chatwootHandler.SyncStatus)
 
 	return rest
 }

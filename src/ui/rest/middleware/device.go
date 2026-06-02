@@ -39,6 +39,9 @@ func DeviceMiddleware(dm *whatsapp.DeviceManager) fiber.Handler {
 		if deviceID == "" {
 			deviceID = strings.TrimSpace(c.Query("device_id"))
 		}
+		if deviceID == "" {
+			deviceID = strings.TrimSpace(c.Params("device_id"))
+		}
 
 		instance, resolvedID, err := dm.ResolveDevice(deviceID)
 		if err != nil {

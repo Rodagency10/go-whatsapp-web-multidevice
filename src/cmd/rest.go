@@ -138,7 +138,7 @@ func restServer(_ *cobra.Command, _ []string) {
 	}
 
 	// Device management routes + Chatwoot config routes (no device middleware required)
-	rest.InitRestDevice(apiGroup, deviceUsecase, chatwootHandler)
+	rest.InitRestDevice(apiGroup, deviceUsecase, dm, chatwootHandler)
 
 	// Device-scoped operations (header-based)
 	headerDeviceGroup := apiGroup.Group("", middleware.DeviceMiddleware(dm))
