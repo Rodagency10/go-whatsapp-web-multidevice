@@ -14,7 +14,6 @@ services:
       - --debug=false
       - --os=Chrome
       - --account-validation=false
-      - --webhook="https://flow.nanoostudio.com/webhook-test/wapi"
     environment:
       - WA_USER=${WA_USER:-admin}
       - WA_PASSWORD=${WA_PASSWORD:-changeme}
