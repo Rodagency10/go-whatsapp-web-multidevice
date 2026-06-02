@@ -451,6 +451,19 @@ func forwardToChatwoot(ctx context.Context, instance *DeviceInstance, payload ma
 		return
 	}
 
+	// Skip group messages
+	chatID, _ := data["chat_id"].(string)
+	if utils.IsGroupJID(chatID) {
+		logrus.Debugf("Chatwoot: Skipping group message (chat_id=%s)", chatID)
+		return
+	}
+
+	// Skip status broadcast messages
+	if chatID == "status@broadcast" {
+		logrus.Debug("Chatwoot: Skipping status broadcast message")
+		return
+	}
+
 	// Extract contact information
 	info, err := extractChatwootContactInfo(ctx, data)
 	if err != nil {
