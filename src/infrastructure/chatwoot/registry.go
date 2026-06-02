@@ -195,6 +195,11 @@ func SetGlobalRegistry(registry *ClientRegistry) {
 	globalRegistry = registry
 }
 
+// GetGlobalRegistry returns the global registry instance.
+func GetGlobalRegistry() *ClientRegistry {
+	return globalRegistry
+}
+
 // GetClientForDevice returns the Chatwoot client for a device via the global registry.
 func GetClientForDevice(deviceID string) (*Client, error) {
 	if globalRegistry == nil {

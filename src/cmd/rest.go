@@ -80,9 +80,8 @@ func restServer(_ *cobra.Command, _ []string) {
 	// Device manager - needed for chatwoot webhook and health check
 	dm := whatsapp.GetDeviceManager()
 
-	// Initialize Chatwoot client registry
-	cwRegistry := chatwoot.NewClientRegistry(chatStorageRepo)
-	_ = cwRegistry.LoadAllConfigs(cmdCtx)
+	// Use the global Chatwoot registry (initialized in root.go)
+	cwRegistry := chatwoot.GetGlobalRegistry()
 
 	// Create Chatwoot handler with registry
 	chatwootHandler := rest.NewChatwootHandler(dm, chatStorageRepo, sendUsecase, cwRegistry)
