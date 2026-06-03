@@ -88,7 +88,7 @@ func forwardPayloadToConfiguredWebhooks(ctx context.Context, instance *DeviceIns
 	}
 
 	if chatwootAllowed && instance != nil {
-		logrus.Infof("Chatwoot: Forwarding %s for device %s (instance.ID=%s)", eventName, instance.ID(), instance.ID())
+		logrus.Infof("Chatwoot: Forwarding %s for device %s", eventName, instance.JID())
 		go forwardToChatwoot(ctx, instance, payload, eventName)
 	} else if !chatwootAllowed {
 		logrus.Debugf("Chatwoot: Skipping event %s - not a Chatwoot event", eventName)
@@ -436,7 +436,7 @@ func syncMessageToChatwoot(cw *chatwoot.Client, info *chatwootContactInfo, conte
 }
 
 func forwardToChatwoot(ctx context.Context, instance *DeviceInstance, payload map[string]any, eventName string) {
-	deviceID := instance.ID()
+	deviceID := instance.JID()
 
 	logrus.Infof("Chatwoot: Attempting to forward %s for device %s...", eventName, deviceID)
 

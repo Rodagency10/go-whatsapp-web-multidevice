@@ -10,11 +10,11 @@ import (
 )
 
 // ClientRegistry manages per-device Chatwoot client instances.
+// Device IDs are stable JIDs (e.g. "22870111810@s.whatsapp.net").
 type ClientRegistry struct {
 	mu      sync.RWMutex
-	clients map[string]*Client // key = device_id (alias)
+	clients map[string]*Client // key = device_id (JID)
 	byInbox map[int]string     // inbox_id → device_id
-	byJID   map[string]string  // jid → device_id
 	repo    domainChatStorage.IChatStorageRepository
 	initOnce sync.Once
 }
@@ -24,31 +24,20 @@ func NewClientRegistry(repo domainChatStorage.IChatStorageRepository) *ClientReg
 	return &ClientRegistry{
 		clients: make(map[string]*Client),
 		byInbox: make(map[int]string),
-		byJID:   make(map[string]string),
 		repo:    repo,
 	}
 }
 
 // GetClient returns the Chatwoot client for a specific device.
-// Falls back to JID lookup if direct device_id lookup fails.
 func (r *ClientRegistry) GetClient(deviceID string) (*Client, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	client, ok := r.clients[deviceID]
-	if ok {
-		return client, nil
+	if !ok {
+		return nil, fmt.Errorf("no Chatwoot client registered for device %s", deviceID)
 	}
-
-	// Fallback: try JID → device_id mapping
-	if alias, found := r.byJID[deviceID]; found {
-		client, ok = r.clients[alias]
-		if ok {
-			return client, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no Chatwoot client registered for device %s", deviceID)
+	return client, nil
 }
 
 // GetClientByInboxID returns the Chatwoot client associated with a given inbox ID.
@@ -69,7 +58,7 @@ func (r *ClientRegistry) GetClientByInboxID(inboxID int) (*Client, error) {
 }
 
 // RegisterClient creates and registers a Chatwoot client for the given device.
-func (r *ClientRegistry) RegisterClient(ctx context.Context, deviceID string, jid string) error {
+func (r *ClientRegistry) RegisterClient(ctx context.Context, deviceID string) error {
 	if r.repo == nil {
 		return fmt.Errorf("storage repository is nil")
 	}
@@ -97,12 +86,6 @@ func (r *ClientRegistry) RegisterClient(ctx context.Context, deviceID string, ji
 	r.clients[deviceID] = client
 	r.byInbox[config.InboxID] = deviceID
 
-	// Store JID → device_id mapping for event-side resolution
-	if jid != "" {
-		r.byJID[jid] = deviceID
-		logrus.WithContext(ctx).Infof("[CHATWOOT_REGISTRY] mapped JID %s → device %s", jid, deviceID)
-	}
-
 	logrus.WithContext(ctx).Infof("[CHATWOOT_REGISTRY] registered client for device %s (inbox_id=%d, account_id=%d)",
 		deviceID, config.InboxID, config.AccountID)
 	return nil
@@ -115,10 +98,6 @@ func (r *ClientRegistry) RemoveClient(deviceID string) {
 
 	if client, ok := r.clients[deviceID]; ok {
 		delete(r.byInbox, client.InboxID)
-		// Clean up JID mapping
-		if client.WADeviceID != "" {
-			delete(r.byJID, client.WADeviceID)
-		}
 	}
 	delete(r.clients, deviceID)
 
@@ -205,21 +184,5 @@ func GetClientForDevice(deviceID string) (*Client, error) {
 	if globalRegistry == nil {
 		return nil, fmt.Errorf("Chatwoot registry not initialized")
 	}
-	client, err := globalRegistry.GetClient(deviceID)
-	if err != nil {
-		logrus.Warnf("Chatwoot: GetClientForDevice(%s) failed, registered devices: %v, jid_map: %v", deviceID, globalRegistry.ListRegisteredDevices(), globalRegistry.ListJIDMappings())
-	}
-	return client, err
-}
-
-// ListJIDMappings returns the current JID → device_id mappings for diagnostics.
-func (r *ClientRegistry) ListJIDMappings() map[string]string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	result := make(map[string]string, len(r.byJID))
-	for jid, deviceID := range r.byJID {
-		result[jid] = deviceID
-	}
-	return result
+	return globalRegistry.GetClient(deviceID)
 }

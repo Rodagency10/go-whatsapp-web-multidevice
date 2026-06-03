@@ -102,7 +102,7 @@ func (m *DeviceManager) DefaultDevice() *DeviceInstance {
 	return nil
 }
 
-// ResolveDevice attempts to locate a device by ID or falls back to the default/only device.
+// ResolveDevice attempts to locate a device by ID or JID, or falls back to the default/only device.
 // It returns the resolved instance, the ID used, or an error when no suitable device is found.
 func (m *DeviceManager) ResolveDevice(deviceID string) (*DeviceInstance, string, error) {
 	if m == nil {
@@ -114,6 +114,17 @@ func (m *DeviceManager) ResolveDevice(deviceID string) (*DeviceInstance, string,
 		if inst, ok := m.GetDevice(trimmedID); ok && inst != nil {
 			return inst, trimmedID, nil
 		}
+
+		// Fallback: search by JID
+		m.mu.RLock()
+		for _, inst := range m.devices {
+			if inst.JID() == trimmedID {
+				m.mu.RUnlock()
+				return inst, inst.ID(), nil
+			}
+		}
+		m.mu.RUnlock()
+
 		return nil, trimmedID, fmt.Errorf("device %s not found", trimmedID)
 	}
 

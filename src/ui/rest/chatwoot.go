@@ -55,7 +55,7 @@ func (h *ChatwootHandler) GetConfig(c *fiber.Ctx) error {
 		})
 	}
 
-	deviceID := instance.ID()
+	deviceID := instance.JID()
 	config, err := h.ChatStorageRepo.GetChatwootConfig(deviceID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(utils.ResponseData{
@@ -110,7 +110,7 @@ func (h *ChatwootHandler) SaveConfig(c *fiber.Ctx) error {
 		})
 	}
 
-	deviceID := instance.ID()
+	deviceID := instance.JID()
 
 	var req struct {
 		ChatwootURL string `json:"chatwoot_url"`
@@ -181,9 +181,8 @@ func (h *ChatwootHandler) SaveConfig(c *fiber.Ctx) error {
 
 	// Register or re-register the client in the registry
 	if enabled {
-		jid := instance.JID()
-		logrus.Infof("Chatwoot: Registering client for device %s (instance.ID=%s, JID=%s)", deviceID, instance.ID(), jid)
-		if err := h.Registry.RegisterClient(c.UserContext(), deviceID, jid); err != nil {
+		logrus.Infof("Chatwoot: Registering client for device %s", deviceID)
+		if err := h.Registry.RegisterClient(c.UserContext(), deviceID); err != nil {
 			logrus.WithError(err).Warnf("Failed to register Chatwoot client for device %s", deviceID)
 		} else {
 			logrus.Infof("Chatwoot: Successfully registered client for device %s", deviceID)
@@ -218,7 +217,7 @@ func (h *ChatwootHandler) DeleteConfig(c *fiber.Ctx) error {
 		})
 	}
 
-	deviceID := instance.ID()
+	deviceID := instance.JID()
 
 	if err := h.ChatStorageRepo.DeleteChatwootConfig(deviceID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(utils.ResponseData{
@@ -252,7 +251,7 @@ func (h *ChatwootHandler) SyncHistory(c *fiber.Ctx) error {
 		})
 	}
 
-	deviceID := instance.ID()
+	deviceID := instance.JID()
 
 	var req chatwoot.SyncRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -276,13 +275,8 @@ func (h *ChatwootHandler) SyncHistory(c *fiber.Ctx) error {
 	syncService := chatwoot.NewSyncService(cwClient, h.ChatStorageRepo)
 	waClient := instance.GetClient()
 
-	storageDeviceID := instance.JID()
-	if storageDeviceID == "" {
-		storageDeviceID = deviceID
-	}
-
-	if syncService.IsRunning(storageDeviceID) {
-		progress := syncService.GetProgress(storageDeviceID)
+	if syncService.IsRunning(deviceID) {
+		progress := syncService.GetProgress(deviceID)
 		return c.Status(fiber.StatusConflict).JSON(utils.ResponseData{
 			Status:  fiber.StatusConflict,
 			Code:    "SYNC_ALREADY_RUNNING",
@@ -300,12 +294,12 @@ func (h *ChatwootHandler) SyncHistory(c *fiber.Ctx) error {
 
 	go func() {
 		ctx := context.Background()
-		progress, err := syncService.SyncHistory(ctx, storageDeviceID, waClient, opts)
+		progress, err := syncService.SyncHistory(ctx, deviceID, waClient, opts)
 		if err != nil {
-			logrus.Errorf("Chatwoot Sync: Failed for device %s: %v", storageDeviceID, err)
+			logrus.Errorf("Chatwoot Sync: Failed for device %s: %v", deviceID, err)
 		} else {
 			logrus.Infof("Chatwoot Sync: Completed for device %s - %d/%d messages synced",
-				storageDeviceID, progress.SyncedMessages, progress.TotalMessages)
+				deviceID, progress.SyncedMessages, progress.TotalMessages)
 		}
 	}()
 
@@ -334,11 +328,7 @@ func (h *ChatwootHandler) SyncStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	deviceID := instance.ID()
-	storageDeviceID := instance.JID()
-	if storageDeviceID == "" {
-		storageDeviceID = deviceID
-	}
+	deviceID := instance.JID()
 
 	cwClient, err := h.Registry.GetClient(deviceID)
 	if err != nil {
@@ -354,7 +344,7 @@ func (h *ChatwootHandler) SyncStatus(c *fiber.Ctx) error {
 	}
 
 	syncService := chatwoot.NewSyncService(cwClient, h.ChatStorageRepo)
-	progress := syncService.GetProgress(storageDeviceID)
+	progress := syncService.GetProgress(deviceID)
 	if progress == nil {
 		return c.JSON(utils.ResponseData{
 			Status:  200,
