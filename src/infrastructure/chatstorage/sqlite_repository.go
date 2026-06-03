@@ -1918,5 +1918,22 @@ func (r *SQLiteRepository) getMigrations() []string {
 
 		// Migration 24: Index chatwoot configs by inbox_id for webhook lookup
 		`CREATE INDEX IF NOT EXISTS idx_chatwoot_configs_inbox ON chatwoot_configs(inbox_id)`,
+
+		// Migration 25: Remove FK constraint on chatwoot_configs.device_id
+		// SQLite doesn't support ALTER TABLE DROP CONSTRAINT, so we recreate the table.
+		`CREATE TABLE IF NOT EXISTS chatwoot_configs_new (
+			device_id VARCHAR(255) PRIMARY KEY,
+			chatwoot_url TEXT NOT NULL,
+			api_token TEXT NOT NULL,
+			account_id INTEGER NOT NULL,
+			inbox_id INTEGER NOT NULL,
+			enabled BOOLEAN DEFAULT 1,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT OR IGNORE INTO chatwoot_configs_new SELECT device_id, chatwoot_url, api_token, account_id, inbox_id, enabled, created_at, updated_at FROM chatwoot_configs`,
+		`DROP TABLE IF EXISTS chatwoot_configs`,
+		`ALTER TABLE chatwoot_configs_new RENAME TO chatwoot_configs`,
+		`CREATE INDEX IF NOT EXISTS idx_chatwoot_configs_inbox ON chatwoot_configs(inbox_id)`,
 	}
 }
