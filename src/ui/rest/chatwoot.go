@@ -424,7 +424,8 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 	}
 	logrus.Debugf("Chatwoot Webhook: Using device %s (resolved: %s) for inbox_id %d", deviceID, resolvedID, payload.Conversation.InboxID)
 
-	c.SetUserContext(whatsapp.ContextWithDevice(c.UserContext(), instance))
+	deviceCtx := whatsapp.ContextWithDevice(c.UserContext(), instance)
+	c.SetUserContext(deviceCtx)
 
 	contact := payload.Conversation.Meta.Sender
 	logrus.Debugf("Chatwoot Webhook: contact_id=%d contact_phone=%s", contact.ID, contact.PhoneNumber)
@@ -455,7 +456,7 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 
 	if len(payload.Attachments) > 0 {
 		for _, attachment := range payload.Attachments {
-			if err := h.handleAttachment(c, destination, attachment, payload.Content); err != nil {
+			if err := h.handleAttachment(deviceCtx, destination, attachment, payload.Content); err != nil {
 				logrus.Errorf("Chatwoot Webhook: Failed to send attachment %d: %v", attachment.ID, err)
 			}
 		}
@@ -468,7 +469,7 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 		}
 		req.Phone = destination
 
-		_, err := h.SendUsecase.SendText(c.Context(), req)
+		_, err := h.SendUsecase.SendText(deviceCtx, req)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
 				"destination": destination,
@@ -483,7 +484,7 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
-func (h *ChatwootHandler) handleAttachment(c *fiber.Ctx, phone string, att chatwoot.Attachment, caption string) error {
+func (h *ChatwootHandler) handleAttachment(ctx context.Context, phone string, att chatwoot.Attachment, caption string) error {
 	switch att.FileType {
 	case "image":
 		req := domainSend.ImageRequest{
@@ -491,7 +492,7 @@ func (h *ChatwootHandler) handleAttachment(c *fiber.Ctx, phone string, att chatw
 			Caption:     caption,
 			ImageURL:    &att.DataURL,
 		}
-		_, err := h.SendUsecase.SendImage(c.Context(), req)
+		_, err := h.SendUsecase.SendImage(ctx, req)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent image attachment to %s", phone)
 		}
@@ -503,7 +504,7 @@ func (h *ChatwootHandler) handleAttachment(c *fiber.Ctx, phone string, att chatw
 			AudioURL:    &att.DataURL,
 			PTT:         true,
 		}
-		_, err := h.SendUsecase.SendAudio(c.Context(), req)
+		_, err := h.SendUsecase.SendAudio(ctx, req)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent audio attachment to %s", phone)
 			return nil
@@ -515,7 +516,7 @@ func (h *ChatwootHandler) handleAttachment(c *fiber.Ctx, phone string, att chatw
 			FileURL:     &att.DataURL,
 			Caption:     caption,
 		}
-		_, err = h.SendUsecase.SendFile(c.Context(), reqFile)
+		_, err = h.SendUsecase.SendFile(ctx, reqFile)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent audio as file attachment to %s", phone)
 		}
@@ -527,7 +528,7 @@ func (h *ChatwootHandler) handleAttachment(c *fiber.Ctx, phone string, att chatw
 			Caption:     caption,
 			VideoURL:    &att.DataURL,
 		}
-		_, err := h.SendUsecase.SendVideo(c.Context(), req)
+		_, err := h.SendUsecase.SendVideo(ctx, req)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent video attachment to %s", phone)
 		}
@@ -539,7 +540,7 @@ func (h *ChatwootHandler) handleAttachment(c *fiber.Ctx, phone string, att chatw
 			FileURL:     &att.DataURL,
 			Caption:     caption,
 		}
-		_, err := h.SendUsecase.SendFile(c.Context(), req)
+		_, err := h.SendUsecase.SendFile(ctx, req)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent file attachment to %s", phone)
 		}
