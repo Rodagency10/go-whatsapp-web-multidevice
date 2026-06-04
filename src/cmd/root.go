@@ -193,6 +193,33 @@ func initEnvConfig() {
 	if viper.IsSet("chatwoot_days_limit_import_messages") {
 		config.ChatwootDaysLimitImportMessages = viper.GetInt("chatwoot_days_limit_import_messages")
 	}
+	if viper.IsSet("chatwoot_human_delivery_enabled") {
+		config.ChatwootHumanDeliveryEnabled = viper.GetBool("chatwoot_human_delivery_enabled")
+	}
+	if viper.IsSet("chatwoot_human_presence_available") {
+		config.ChatwootHumanPresenceAvailable = viper.GetBool("chatwoot_human_presence_available")
+	}
+	if viper.IsSet("chatwoot_human_presence_restore") {
+		config.ChatwootHumanPresenceRestore = viper.GetBool("chatwoot_human_presence_restore")
+	}
+	if viper.IsSet("chatwoot_human_typing_enabled") {
+		config.ChatwootHumanTypingEnabled = viper.GetBool("chatwoot_human_typing_enabled")
+	}
+	if viper.IsSet("chatwoot_human_typing_base_ms") {
+		config.ChatwootHumanTypingBaseMs = viper.GetInt("chatwoot_human_typing_base_ms")
+	}
+	if viper.IsSet("chatwoot_human_typing_per_char_ms") {
+		config.ChatwootHumanTypingPerCharMs = viper.GetInt("chatwoot_human_typing_per_char_ms")
+	}
+	if viper.IsSet("chatwoot_human_typing_min_ms") {
+		config.ChatwootHumanTypingMinMs = viper.GetInt("chatwoot_human_typing_min_ms")
+	}
+	if viper.IsSet("chatwoot_human_typing_max_ms") {
+		config.ChatwootHumanTypingMaxMs = viper.GetInt("chatwoot_human_typing_max_ms")
+	}
+	if viper.IsSet("chatwoot_human_typing_media_ms") {
+		config.ChatwootHumanTypingMediaMs = viper.GetInt("chatwoot_human_typing_media_ms")
+	}
 }
 
 func initFlags() {
@@ -360,6 +387,60 @@ func initFlags() {
 		"chatwoot-days-limit-import-messages", "",
 		config.ChatwootDaysLimitImportMessages,
 		`days of message history to import to Chatwoot --chatwoot-days-limit-import-messages <int> | example: --chatwoot-days-limit-import-messages=7`,
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&config.ChatwootHumanDeliveryEnabled,
+		"chatwoot-human-delivery-enabled", "",
+		config.ChatwootHumanDeliveryEnabled,
+		`simulate human presence and typing before Chatwoot outbound delivery --chatwoot-human-delivery-enabled <true/false>`,
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&config.ChatwootHumanPresenceAvailable,
+		"chatwoot-human-presence-available", "",
+		config.ChatwootHumanPresenceAvailable,
+		`send available presence before Chatwoot outbound delivery --chatwoot-human-presence-available <true/false>`,
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&config.ChatwootHumanPresenceRestore,
+		"chatwoot-human-presence-restore", "",
+		config.ChatwootHumanPresenceRestore,
+		`send unavailable presence after Chatwoot outbound delivery --chatwoot-human-presence-restore <true/false>`,
+	)
+	rootCmd.PersistentFlags().BoolVarP(
+		&config.ChatwootHumanTypingEnabled,
+		"chatwoot-human-typing-enabled", "",
+		config.ChatwootHumanTypingEnabled,
+		`send typing indicator before Chatwoot outbound delivery --chatwoot-human-typing-enabled <true/false>`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.ChatwootHumanTypingBaseMs,
+		"chatwoot-human-typing-base-ms", "",
+		config.ChatwootHumanTypingBaseMs,
+		`base typing delay in ms for Chatwoot human delivery --chatwoot-human-typing-base-ms <int>`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.ChatwootHumanTypingPerCharMs,
+		"chatwoot-human-typing-per-char-ms", "",
+		config.ChatwootHumanTypingPerCharMs,
+		`per-character typing delay in ms --chatwoot-human-typing-per-char-ms <int>`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.ChatwootHumanTypingMinMs,
+		"chatwoot-human-typing-min-ms", "",
+		config.ChatwootHumanTypingMinMs,
+		`minimum typing delay in ms --chatwoot-human-typing-min-ms <int>`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.ChatwootHumanTypingMaxMs,
+		"chatwoot-human-typing-max-ms", "",
+		config.ChatwootHumanTypingMaxMs,
+		`maximum typing delay in ms --chatwoot-human-typing-max-ms <int>`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.ChatwootHumanTypingMediaMs,
+		"chatwoot-human-typing-media-ms", "",
+		config.ChatwootHumanTypingMediaMs,
+		`typing delay in ms for media-only Chatwoot outbound messages --chatwoot-human-typing-media-ms <int>`,
 	)
 }
 

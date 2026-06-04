@@ -383,8 +383,6 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 		payload.Event, payload.MessageType, payload.Conversation.Meta.Sender.ID, payload.Conversation.InboxID, payload.IsDeleted())
 
 	switch payload.Event {
-	case "conversation_typing_on", "conversation_typing_off":
-		return h.handleTypingPresence(c, payload)
 	case "message_created":
 		return h.handleMessageCreated(c, payload)
 	case "message_updated":
@@ -392,66 +390,6 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 	default:
 		return c.SendStatus(fiber.StatusOK)
 	}
-}
-
-func (h *ChatwootHandler) handleTypingPresence(c *fiber.Ctx, payload chatwoot.WebhookPayload) error {
-	if payload.Conversation.InboxID == 0 {
-		logrus.Warn("Chatwoot Webhook: inbox_id not found in typing webhook payload")
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	cwClient, err := h.Registry.GetClientByInboxID(payload.Conversation.InboxID)
-	if err != nil {
-		logrus.Errorf("Chatwoot Webhook: Failed to resolve device by inbox_id %d: %v", payload.Conversation.InboxID, err)
-		return c.Status(fiber.StatusServiceUnavailable).JSON(utils.ResponseData{
-			Status:  fiber.StatusServiceUnavailable,
-			Code:    "DEVICE_NOT_AVAILABLE",
-			Message: fmt.Sprintf("No device configured for inbox_id %d", payload.Conversation.InboxID),
-		})
-	}
-
-	instance, resolvedID, err := h.DeviceManager.ResolveDevice(cwClient.WADeviceID)
-	if err != nil {
-		logrus.Errorf("Chatwoot Webhook: Failed to resolve device %s: %v", cwClient.WADeviceID, err)
-		return c.Status(fiber.StatusServiceUnavailable).JSON(utils.ResponseData{
-			Status:  fiber.StatusServiceUnavailable,
-			Code:    "DEVICE_NOT_AVAILABLE",
-			Message: fmt.Sprintf("Device %s not available: %v", cwClient.WADeviceID, err),
-		})
-	}
-
-	logrus.Debugf("Chatwoot Webhook: Using device %s (resolved: %s) for typing event inbox_id %d", cwClient.WADeviceID, resolvedID, payload.Conversation.InboxID)
-
-	deviceCtx := whatsapp.ContextWithDevice(c.UserContext(), instance)
-	c.SetUserContext(deviceCtx)
-
-	destination := resolveChatwootDestination(payload.Conversation.Meta.Sender)
-	if destination == "" {
-		logrus.Warnf("Chatwoot Webhook: No destination phone for typing event contact ID %d", payload.Conversation.Meta.Sender.ID)
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	action := "start"
-	if payload.Event == "conversation_typing_off" {
-		action = "stop"
-	}
-
-	req := domainSend.ChatPresenceRequest{
-		BaseRequest: domainSend.BaseRequest{Phone: destination},
-		Action:      action,
-	}
-
-	if _, err := h.SendUsecase.SendChatPresence(deviceCtx, req); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"destination": destination,
-			"action":      action,
-			"error":       err.Error(),
-		}).Error("Chatwoot Webhook: Failed to send typing presence (returning 200 to prevent retry)")
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	logrus.Infof("Chatwoot Webhook: Sent typing presence %s to %s", action, destination)
-	return c.SendStatus(fiber.StatusOK)
 }
 
 func resolveChatwootDestination(contact chatwoot.Contact) string {

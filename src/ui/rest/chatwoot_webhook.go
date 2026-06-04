@@ -6,7 +6,6 @@ import (
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
 	domainMessage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/message"
-	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatwoot"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
@@ -36,56 +35,42 @@ func (h *ChatwootHandler) handleMessageCreated(c *fiber.Ctx, payload chatwoot.We
 		return c.SendStatus(fiber.StatusOK)
 	}
 
-	var (
-		whatsappMessageID string
-		messageType       = "text"
-		lastContent       string
-	)
-
-	if len(payload.Attachments) > 0 {
-		for i, attachment := range payload.Attachments {
-			msgID, msgType, err := h.handleAttachment(ctx.deviceCtx, ctx.destination, attachment, payload.Content)
-			if err != nil {
-				logrus.Errorf("Chatwoot Webhook: Failed to send attachment %d: %v", attachment.ID, err)
-				continue
-			}
-			if i == 0 && msgID != "" {
-				whatsappMessageID = msgID
-				messageType = msgType
-			}
-		}
-		if whatsappMessageID == "" {
-			return c.SendStatus(fiber.StatusOK)
-		}
-	} else {
-		content := chatwoot.EffectiveTextContent(payload)
-		if content == "" {
-			return c.SendStatus(fiber.StatusOK)
-		}
-		req := domainSend.MessageRequest{
-			BaseRequest: domainSend.BaseRequest{Phone: ctx.destination},
-			Message:     content,
-		}
-		resp, err := h.SendUsecase.SendText(ctx.deviceCtx, req)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"destination": ctx.destination,
-				"is_group":    ctx.isGroup,
-				"error":       err.Error(),
-			}).Error("Chatwoot Webhook: Failed to send message (returning 200 to prevent retry)")
-			return c.SendStatus(fiber.StatusOK)
-		}
-		whatsappMessageID = resp.MessageID
-		lastContent = content
-		logrus.Infof("Chatwoot Webhook: Sent text message to %s", ctx.destination)
+	if !hasDeliverableMessageCreatedContent(payload) {
+		return c.SendStatus(fiber.StatusOK)
 	}
 
-	if err := h.saveChatwootMessageLink(ctx, payload.ID, whatsappMessageID, messageType, lastContent,
+	if chatwoot.HumanDeliveryEnabled() {
+		webhookCtx := *ctx
+		go h.asyncDeliverMessageCreated(webhookCtx, payload)
+		return c.SendStatus(fiber.StatusOK)
+	}
+
+	result, err := h.deliverMessageCreated(ctx.deviceCtx, ctx, payload)
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"destination": ctx.destination,
+			"is_group":    ctx.isGroup,
+			"error":       err.Error(),
+		}).Error("Chatwoot Webhook: Failed to send message (returning 200 to prevent retry)")
+		return c.SendStatus(fiber.StatusOK)
+	}
+	if result == nil || result.whatsappMessageID == "" {
+		return c.SendStatus(fiber.StatusOK)
+	}
+
+	if err := h.saveChatwootMessageLink(ctx, payload.ID, result.whatsappMessageID, result.messageType, result.lastContent,
 		chatstorage.ChatwootLinkActionCreated, chatstorage.ChatwootLinkStatusActive); err != nil {
 		logrus.WithError(err).Warnf("Chatwoot Webhook: Failed to save message link for chatwoot_id=%d", payload.ID)
 	}
 
 	return c.SendStatus(fiber.StatusOK)
+}
+
+func hasDeliverableMessageCreatedContent(payload chatwoot.WebhookPayload) bool {
+	if len(payload.Attachments) > 0 {
+		return true
+	}
+	return chatwoot.EffectiveTextContent(payload) != ""
 }
 
 func (h *ChatwootHandler) handleMessageUpdated(c *fiber.Ctx, payload chatwoot.WebhookPayload) error {

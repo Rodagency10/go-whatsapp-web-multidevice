@@ -64,4 +64,15 @@ var (
 	// Chatwoot History Sync settings
 	ChatwootImportMessages          = false // Enable message history import to Chatwoot
 	ChatwootDaysLimitImportMessages = 3     // Days of history to import (default: 3)
+
+	// Chatwoot human-like delivery (presence + typing before outbound webhook send)
+	ChatwootHumanDeliveryEnabled      = true
+	ChatwootHumanPresenceAvailable    = true
+	ChatwootHumanPresenceRestore      = true
+	ChatwootHumanTypingEnabled        = true
+	ChatwootHumanTypingBaseMs         = 800
+	ChatwootHumanTypingPerCharMs      = 40
+	ChatwootHumanTypingMinMs          = 1200
+	ChatwootHumanTypingMaxMs          = 12000
+	ChatwootHumanTypingMediaMs        = 2500
 )
