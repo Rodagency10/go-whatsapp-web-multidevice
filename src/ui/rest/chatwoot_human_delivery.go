@@ -97,10 +97,7 @@ func (h *ChatwootHandler) runHumanPostDelivery(ctx context.Context, webhookCtx *
 }
 
 func (h *ChatwootHandler) sendTypingStart(ctx context.Context, destination string) bool {
-	_, err := h.SendUsecase.SendChatPresence(ctx, domainSend.ChatPresenceRequest{
-		BaseRequest: domainSend.BaseRequest{Phone: destination},
-		Action:      "start",
-	})
+	_, err := h.SendUsecase.SendChatPresence(ctx, newChatPresenceRequest(destination, "start"))
 	if err != nil {
 		logrus.WithError(err).Warnf("Chatwoot Human Delivery: failed to start typing for %s", destination)
 		return false
@@ -109,12 +106,17 @@ func (h *ChatwootHandler) sendTypingStart(ctx context.Context, destination strin
 }
 
 func (h *ChatwootHandler) sendTypingStop(ctx context.Context, destination string) {
-	_, err := h.SendUsecase.SendChatPresence(ctx, domainSend.ChatPresenceRequest{
-		BaseRequest: domainSend.BaseRequest{Phone: destination},
-		Action:      "stop",
-	})
+	_, err := h.SendUsecase.SendChatPresence(ctx, newChatPresenceRequest(destination, "stop"))
 	if err != nil {
 		logrus.WithError(err).Warnf("Chatwoot Human Delivery: failed to stop typing for %s", destination)
+	}
+}
+
+// newChatPresenceRequest matches POST /send/chat-presence: phone and action at the root.
+func newChatPresenceRequest(phone, action string) domainSend.ChatPresenceRequest {
+	return domainSend.ChatPresenceRequest{
+		Phone:  phone,
+		Action: action,
 	}
 }
 

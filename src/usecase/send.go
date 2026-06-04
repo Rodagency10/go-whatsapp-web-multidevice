@@ -1373,6 +1373,10 @@ func (service serviceSend) SendPresence(ctx context.Context, request domainSend.
 }
 
 func (service serviceSend) SendChatPresence(ctx context.Context, request domainSend.ChatPresenceRequest) (response domainSend.GenericResponse, err error) {
+	if request.Phone == "" && request.BaseRequest.Phone != "" {
+		request.Phone = request.BaseRequest.Phone
+	}
+
 	err = validations.ValidateSendChatPresence(ctx, request)
 	if err != nil {
 		return response, err
