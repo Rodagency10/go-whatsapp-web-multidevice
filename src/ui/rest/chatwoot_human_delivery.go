@@ -9,6 +9,7 @@ import (
 	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatwoot"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
+	"github.com/aldinokemal/go-whatsapp-web-multidevice/pkg/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -55,45 +56,110 @@ func (h *ChatwootHandler) runHumanPreDelivery(ctx context.Context, webhookCtx *o
 		if err != nil {
 			logrus.WithError(err).Warn("Chatwoot Human Delivery: failed to send available presence")
 		} else {
-			logrus.Debugf("Chatwoot Human Delivery: sent available presence for %s", webhookCtx.destination)
+			logrus.Infof("Chatwoot Human Delivery: online (available) before sending to %s", webhookCtx.destination)
 		}
+	}
+
+	warmRecipientPresence(ctx, webhookCtx.destination)
+
+	if settle := chatwoot.PresenceSettleDuration(); settle > 0 {
+		time.Sleep(settle)
 	}
 
 	if !config.ChatwootHumanTypingEnabled {
 		return
 	}
 
-	_, err := h.SendUsecase.SendChatPresence(ctx, domainSend.ChatPresenceRequest{
-		BaseRequest: domainSend.BaseRequest{Phone: webhookCtx.destination},
-		Action:      "start",
-	})
-	if err != nil {
-		logrus.WithError(err).Warn("Chatwoot Human Delivery: failed to start typing indicator")
+	typingDuration := chatwoot.ComputeTypingDuration(chatwoot.DefaultTypingDurationOptions(payload))
+	if !h.sendTypingStart(ctx, webhookCtx.destination) {
+		logrus.Warnf("Chatwoot Human Delivery: typing indicator not started for %s; sending without delay", webhookCtx.destination)
 		return
 	}
 
-	typingDuration := chatwoot.ComputeTypingDuration(chatwoot.DefaultTypingDurationOptions(payload))
-	logrus.Debugf("Chatwoot Human Delivery: typing for %s before chatwoot_id=%d", typingDuration, payload.ID)
-	time.Sleep(typingDuration)
+	logrus.Infof("Chatwoot Human Delivery: typing on %s for %s (chatwoot_id=%d)",
+		webhookCtx.destination, typingDuration, payload.ID)
+	h.sleepWithTypingRefresh(ctx, webhookCtx.destination, typingDuration)
 }
 
 func (h *ChatwootHandler) runHumanPostDelivery(ctx context.Context, webhookCtx *outboundWebhookContext) {
 	if config.ChatwootHumanTypingEnabled {
-		_, err := h.SendUsecase.SendChatPresence(ctx, domainSend.ChatPresenceRequest{
-			BaseRequest: domainSend.BaseRequest{Phone: webhookCtx.destination},
-			Action:      "stop",
-		})
-		if err != nil {
-			logrus.WithError(err).Warn("Chatwoot Human Delivery: failed to stop typing indicator")
-		}
+		h.sendTypingStop(ctx, webhookCtx.destination)
 	}
 
 	if config.ChatwootHumanPresenceRestore {
 		_, err := h.SendUsecase.SendPresence(ctx, domainSend.PresenceRequest{Type: "unavailable"})
 		if err != nil {
 			logrus.WithError(err).Warn("Chatwoot Human Delivery: failed to restore unavailable presence")
+		} else {
+			logrus.Debugf("Chatwoot Human Delivery: restored unavailable presence after send to %s", webhookCtx.destination)
 		}
 	}
+}
+
+func (h *ChatwootHandler) sendTypingStart(ctx context.Context, destination string) bool {
+	_, err := h.SendUsecase.SendChatPresence(ctx, domainSend.ChatPresenceRequest{
+		BaseRequest: domainSend.BaseRequest{Phone: destination},
+		Action:      "start",
+	})
+	if err != nil {
+		logrus.WithError(err).Warnf("Chatwoot Human Delivery: failed to start typing for %s", destination)
+		return false
+	}
+	return true
+}
+
+func (h *ChatwootHandler) sendTypingStop(ctx context.Context, destination string) {
+	_, err := h.SendUsecase.SendChatPresence(ctx, domainSend.ChatPresenceRequest{
+		BaseRequest: domainSend.BaseRequest{Phone: destination},
+		Action:      "stop",
+	})
+	if err != nil {
+		logrus.WithError(err).Warnf("Chatwoot Human Delivery: failed to stop typing for %s", destination)
+	}
+}
+
+// sleepWithTypingRefresh waits while re-sending composing so WhatsApp keeps showing typing.
+func (h *ChatwootHandler) sleepWithTypingRefresh(ctx context.Context, destination string, total time.Duration) {
+	if total <= 0 {
+		return
+	}
+
+	refresh := chatwoot.TypingRefreshInterval()
+	remaining := total
+	for remaining > 0 {
+		chunk := remaining
+		if chunk > refresh {
+			chunk = refresh
+		}
+		time.Sleep(chunk)
+		remaining -= chunk
+		if remaining <= 0 {
+			break
+		}
+		h.sendTypingStart(ctx, destination)
+	}
+}
+
+// warmRecipientPresence subscribes to the chat (best effort) so composing state is accepted by WhatsApp.
+func warmRecipientPresence(ctx context.Context, destination string) {
+	client := whatsapp.ClientFromContext(ctx)
+	if client == nil {
+		return
+	}
+
+	jid, err := utils.ValidateJidWithLogin(client, destination)
+	if err != nil {
+		logrus.WithError(err).Debugf("Chatwoot Human Delivery: skip presence warm-up for %s", destination)
+		return
+	}
+
+	warmCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if err := client.SubscribePresence(warmCtx, jid); err != nil {
+		logrus.WithError(err).Debugf("Chatwoot Human Delivery: SubscribePresence for %s failed (continuing)", jid.String())
+		return
+	}
+	logrus.Debugf("Chatwoot Human Delivery: subscribed to presence for %s", jid.String())
 }
 
 func (h *ChatwootHandler) deliverMessageCreated(

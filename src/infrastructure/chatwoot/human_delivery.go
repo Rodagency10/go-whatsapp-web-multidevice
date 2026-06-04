@@ -58,6 +58,24 @@ func ComputeTypingDuration(opts TypingDurationOptions) time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
+// TypingRefreshInterval returns how often to re-send composing during a long wait.
+func TypingRefreshInterval() time.Duration {
+	ms := config.ChatwootHumanTypingRefreshMs
+	if ms <= 0 {
+		return 4 * time.Second
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
+// PresenceSettleDuration is the pause after going available before typing starts.
+func PresenceSettleDuration() time.Duration {
+	ms := config.ChatwootHumanPresenceSettleMs
+	if ms <= 0 {
+		return 0
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
 // HumanDeliveryEnabled reports whether the full human delivery pipeline is active.
 func HumanDeliveryEnabled() bool {
 	return config.ChatwootHumanDeliveryEnabled

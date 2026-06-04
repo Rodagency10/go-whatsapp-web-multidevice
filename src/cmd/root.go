@@ -220,6 +220,12 @@ func initEnvConfig() {
 	if viper.IsSet("chatwoot_human_typing_media_ms") {
 		config.ChatwootHumanTypingMediaMs = viper.GetInt("chatwoot_human_typing_media_ms")
 	}
+	if viper.IsSet("chatwoot_human_presence_settle_ms") {
+		config.ChatwootHumanPresenceSettleMs = viper.GetInt("chatwoot_human_presence_settle_ms")
+	}
+	if viper.IsSet("chatwoot_human_typing_refresh_ms") {
+		config.ChatwootHumanTypingRefreshMs = viper.GetInt("chatwoot_human_typing_refresh_ms")
+	}
 }
 
 func initFlags() {
@@ -441,6 +447,18 @@ func initFlags() {
 		"chatwoot-human-typing-media-ms", "",
 		config.ChatwootHumanTypingMediaMs,
 		`typing delay in ms for media-only Chatwoot outbound messages --chatwoot-human-typing-media-ms <int>`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.ChatwootHumanPresenceSettleMs,
+		"chatwoot-human-presence-settle-ms", "",
+		config.ChatwootHumanPresenceSettleMs,
+		`pause in ms after going available before typing starts --chatwoot-human-presence-settle-ms <int>`,
+	)
+	rootCmd.PersistentFlags().IntVarP(
+		&config.ChatwootHumanTypingRefreshMs,
+		"chatwoot-human-typing-refresh-ms", "",
+		config.ChatwootHumanTypingRefreshMs,
+		`re-send composing every N ms during long typing delays --chatwoot-human-typing-refresh-ms <int>`,
 	)
 }
 

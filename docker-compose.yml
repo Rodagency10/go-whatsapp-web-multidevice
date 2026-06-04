@@ -17,6 +17,10 @@ services:
     environment:
       - WA_USER=${WA_USER:-admin}
       - WA_PASSWORD=${WA_PASSWORD:-changeme}
+      - CHATWOOT_HUMAN_DELIVERY_ENABLED=true
+      - CHATWOOT_HUMAN_TYPING_MIN_MS=3000
+      - CHATWOOT_HUMAN_TYPING_MEDIA_MS=5000
+      - CHATWOOT_HUMAN_PRESENCE_SETTLE_MS=800
 
 
 volumes:

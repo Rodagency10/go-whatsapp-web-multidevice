@@ -70,9 +70,11 @@ var (
 	ChatwootHumanPresenceAvailable    = true
 	ChatwootHumanPresenceRestore      = true
 	ChatwootHumanTypingEnabled        = true
-	ChatwootHumanTypingBaseMs         = 800
-	ChatwootHumanTypingPerCharMs      = 40
-	ChatwootHumanTypingMinMs          = 1200
+	ChatwootHumanTypingBaseMs         = 1000
+	ChatwootHumanTypingPerCharMs      = 50
+	ChatwootHumanTypingMinMs          = 2500
 	ChatwootHumanTypingMaxMs          = 12000
-	ChatwootHumanTypingMediaMs        = 2500
+	ChatwootHumanTypingMediaMs        = 4500
+	ChatwootHumanPresenceSettleMs     = 600  // pause after available before typing
+	ChatwootHumanTypingRefreshMs      = 4000 // re-send composing during long waits
 )
