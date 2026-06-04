@@ -244,3 +244,64 @@ func countMessageReactions(t *testing.T, repo *SQLiteRepository) int {
 	}
 	return count
 }
+
+func TestSQLiteRepositoryChatwootMessageLinks(t *testing.T) {
+	repo := newTestSQLiteRepository(t)
+	deviceID := "628123456789@s.whatsapp.net"
+
+	link := &domainChatStorage.ChatwootMessageLink{
+		DeviceID:          deviceID,
+		InboxID:           63,
+		ChatwootMessageID: 250,
+		WhatsAppMessageID: "WA_MSG_ID",
+		ChatJID:           "22897986520",
+		MessageType:       "text",
+		LastContent:       "hello",
+		ActionType:        domainChatStorage.ChatwootLinkActionCreated,
+		Status:            domainChatStorage.ChatwootLinkStatusActive,
+	}
+	if err := repo.SaveChatwootMessageLink(link); err != nil {
+		t.Fatalf("save link: %v", err)
+	}
+
+	got, err := repo.GetChatwootMessageLinkByChatwootID(deviceID, 250)
+	if err != nil {
+		t.Fatalf("get link: %v", err)
+	}
+	if got == nil || got.WhatsAppMessageID != "WA_MSG_ID" || got.LastContent != "hello" {
+		t.Fatalf("unexpected link: %+v", got)
+	}
+
+	got.LastContent = "hello world"
+	got.Status = domainChatStorage.ChatwootLinkStatusEdited
+	got.ActionType = domainChatStorage.ChatwootLinkActionUpdated
+	if err := repo.UpdateChatwootMessageLink(got); err != nil {
+		t.Fatalf("update link: %v", err)
+	}
+
+	got, err = repo.GetChatwootMessageLinkByChatwootID(deviceID, 250)
+	if err != nil {
+		t.Fatalf("get updated link: %v", err)
+	}
+	if got.LastContent != "hello world" || got.Status != domainChatStorage.ChatwootLinkStatusEdited {
+		t.Fatalf("unexpected updated link: %+v", got)
+	}
+
+	got.Status = domainChatStorage.ChatwootLinkStatusRevoked
+	got.ActionType = domainChatStorage.ChatwootLinkActionDeleted
+	if err := repo.UpdateChatwootMessageLink(got); err != nil {
+		t.Fatalf("revoke status update: %v", err)
+	}
+}
+
+func TestSQLiteRepositoryInitializesChatwootMessageLinksSchema(t *testing.T) {
+	repo := newTestSQLiteRepository(t)
+
+	var tableName string
+	err := repo.db.QueryRow(`
+		SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chatwoot_message_links'
+	`).Scan(&tableName)
+	if err != nil {
+		t.Fatalf("expected chatwoot_message_links table: %v", err)
+	}
+}

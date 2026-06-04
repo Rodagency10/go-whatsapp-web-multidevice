@@ -226,3 +226,15 @@ func (r *deviceChatStorage) DeleteChatwootConfig(deviceID string) error {
 func (r *deviceChatStorage) ListChatwootConfigs() ([]*domainChatStorage.ChatwootConfig, error) {
 	return r.base.ListChatwootConfigs()
 }
+
+func (r *deviceChatStorage) SaveChatwootMessageLink(link *domainChatStorage.ChatwootMessageLink) error {
+	return r.base.SaveChatwootMessageLink(link)
+}
+
+func (r *deviceChatStorage) GetChatwootMessageLinkByChatwootID(deviceID string, chatwootMessageID int) (*domainChatStorage.ChatwootMessageLink, error) {
+	return r.base.GetChatwootMessageLinkByChatwootID(deviceID, chatwootMessageID)
+}
+
+func (r *deviceChatStorage) UpdateChatwootMessageLink(link *domainChatStorage.ChatwootMessageLink) error {
+	return r.base.UpdateChatwootMessageLink(link)
+}

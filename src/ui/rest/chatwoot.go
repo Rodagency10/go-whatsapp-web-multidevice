@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/domains/chatstorage"
+	domainMessage "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/message"
 	domainSend "github.com/aldinokemal/go-whatsapp-web-multidevice/domains/send"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/chatwoot"
 	"github.com/aldinokemal/go-whatsapp-web-multidevice/infrastructure/whatsapp"
@@ -17,6 +18,7 @@ type ChatwootHandler struct {
 	DeviceManager   *whatsapp.DeviceManager
 	ChatStorageRepo chatstorage.IChatStorageRepository
 	SendUsecase     domainSend.ISendUsecase
+	MessageUsecase  domainMessage.IMessageUsecase
 	Registry        *chatwoot.ClientRegistry
 }
 
@@ -24,12 +26,14 @@ func NewChatwootHandler(
 	dm *whatsapp.DeviceManager,
 	chatStorageRepo chatstorage.IChatStorageRepository,
 	sendUsecase domainSend.ISendUsecase,
+	messageUsecase domainMessage.IMessageUsecase,
 	registry *chatwoot.ClientRegistry,
 ) *ChatwootHandler {
 	return &ChatwootHandler{
 		DeviceManager:   dm,
 		ChatStorageRepo: chatStorageRepo,
 		SendUsecase:     sendUsecase,
+		MessageUsecase:  messageUsecase,
 		Registry:        registry,
 	}
 }
@@ -375,107 +379,19 @@ func (h *ChatwootHandler) HandleWebhook(c *fiber.Ctx) error {
 		return utils.ResponseError(c, "Invalid payload")
 	}
 
-	logrus.Debugf("Chatwoot Webhook: event=%s message_type=%s contact_id=%d inbox_id=%d",
-		payload.Event, payload.MessageType, payload.Conversation.Meta.Sender.ID, payload.Conversation.InboxID)
+	logrus.Debugf("Chatwoot Webhook: event=%s message_type=%s contact_id=%d inbox_id=%d deleted=%v",
+		payload.Event, payload.MessageType, payload.Conversation.Meta.Sender.ID, payload.Conversation.InboxID, payload.IsDeleted())
 
-	if payload.Event == "conversation_typing_on" || payload.Event == "conversation_typing_off" {
+	switch payload.Event {
+	case "conversation_typing_on", "conversation_typing_off":
 		return h.handleTypingPresence(c, payload)
-	}
-
-	if payload.Event != "message_created" {
+	case "message_created":
+		return h.handleMessageCreated(c, payload)
+	case "message_updated":
+		return h.handleMessageUpdated(c, payload)
+	default:
 		return c.SendStatus(fiber.StatusOK)
 	}
-
-	if payload.MessageType != "outgoing" {
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	if payload.Private {
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	// Lookup device by inbox_id from webhook payload
-	if payload.Conversation.InboxID == 0 {
-		logrus.Warn("Chatwoot Webhook: inbox_id not found in webhook payload")
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	cwClient, err := h.Registry.GetClientByInboxID(payload.Conversation.InboxID)
-	if err != nil {
-		logrus.Errorf("Chatwoot Webhook: Failed to resolve device by inbox_id %d: %v", payload.Conversation.InboxID, err)
-		return c.Status(fiber.StatusServiceUnavailable).JSON(utils.ResponseData{
-			Status:  fiber.StatusServiceUnavailable,
-			Code:    "DEVICE_NOT_AVAILABLE",
-			Message: fmt.Sprintf("No device configured for inbox_id %d", payload.Conversation.InboxID),
-		})
-	}
-
-	deviceID := cwClient.WADeviceID
-
-	if chatwoot.IsMessageSentByUs(deviceID, payload.ID) {
-		logrus.Debugf("Chatwoot Webhook: Skipping echo message %d (created by our API)", payload.ID)
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	instance, resolvedID, err := h.DeviceManager.ResolveDevice(deviceID)
-	if err != nil {
-		logrus.Errorf("Chatwoot Webhook: Failed to resolve device %s: %v", deviceID, err)
-		return c.Status(fiber.StatusServiceUnavailable).JSON(utils.ResponseData{
-			Status:  fiber.StatusServiceUnavailable,
-			Code:    "DEVICE_NOT_AVAILABLE",
-			Message: fmt.Sprintf("Device %s not available: %v", deviceID, err),
-		})
-	}
-	logrus.Debugf("Chatwoot Webhook: Using device %s (resolved: %s) for inbox_id %d", deviceID, resolvedID, payload.Conversation.InboxID)
-
-	deviceCtx := whatsapp.ContextWithDevice(c.UserContext(), instance)
-	c.SetUserContext(deviceCtx)
-
-	contact := payload.Conversation.Meta.Sender
-	logrus.Debugf("Chatwoot Webhook: contact_id=%d contact_phone=%s", contact.ID, contact.PhoneNumber)
-	destination := resolveChatwootDestination(contact)
-
-	if destination == "" {
-		logrus.Warnf("Chatwoot Webhook: No destination phone for contact ID %d", contact.ID)
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	isGroup := utils.IsGroupJID(destination)
-	destination = utils.CleanPhoneForWhatsApp(destination)
-	if !isGroup {
-		destination = utils.ExtractPhoneFromJID(destination)
-	}
-
-	logrus.Debugf("Chatwoot Webhook: Sending to destination=%s isGroup=%v", destination, isGroup)
-
-	if len(payload.Attachments) > 0 {
-		for _, attachment := range payload.Attachments {
-			if err := h.handleAttachment(deviceCtx, destination, attachment, payload.Content); err != nil {
-				logrus.Errorf("Chatwoot Webhook: Failed to send attachment %d: %v", attachment.ID, err)
-			}
-		}
-		return c.SendStatus(fiber.StatusOK)
-	}
-
-	if payload.Content != "" {
-		req := domainSend.MessageRequest{
-			Message: payload.Content,
-		}
-		req.Phone = destination
-
-		_, err := h.SendUsecase.SendText(deviceCtx, req)
-		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"destination": destination,
-				"is_group":    isGroup,
-				"error":       err.Error(),
-			}).Error("Chatwoot Webhook: Failed to send message (returning 200 to prevent retry)")
-			return c.SendStatus(fiber.StatusOK)
-		}
-		logrus.Infof("Chatwoot Webhook: Sent text message to %s", destination)
-	}
-
-	return c.SendStatus(fiber.StatusOK)
 }
 
 func (h *ChatwootHandler) handleTypingPresence(c *fiber.Ctx, payload chatwoot.WebhookPayload) error {
@@ -553,67 +469,78 @@ func resolveChatwootDestination(contact chatwoot.Contact) string {
 	return ""
 }
 
-func (h *ChatwootHandler) handleAttachment(ctx context.Context, phone string, att chatwoot.Attachment, caption string) error {
+func (h *ChatwootHandler) handleAttachment(ctx context.Context, phone string, att chatwoot.Attachment, caption string) (messageID string, messageType string, err error) {
 	switch att.FileType {
 	case "image":
+		messageType = "image"
 		req := domainSend.ImageRequest{
 			BaseRequest: domainSend.BaseRequest{Phone: phone},
 			Caption:     caption,
 			ImageURL:    &att.DataURL,
 		}
-		_, err := h.SendUsecase.SendImage(ctx, req)
+		resp, err := h.SendUsecase.SendImage(ctx, req)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent image attachment to %s", phone)
+			return resp.MessageID, messageType, nil
 		}
-		return err
+		return "", messageType, err
 
 	case "audio":
+		messageType = "audio"
 		req := domainSend.AudioRequest{
 			BaseRequest: domainSend.BaseRequest{Phone: phone},
 			AudioURL:    &att.DataURL,
 			PTT:         true,
 		}
-		_, err := h.SendUsecase.SendAudio(ctx, req)
+		resp, err := h.SendUsecase.SendAudio(ctx, req)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent audio attachment to %s", phone)
-			return nil
+			return resp.MessageID, messageType, nil
 		}
 
 		logrus.Warnf("Chatwoot Webhook: Failed to send as audio (%v), retrying as file...", err)
+		messageType = "file"
 		reqFile := domainSend.FileRequest{
 			BaseRequest: domainSend.BaseRequest{Phone: phone},
 			FileURL:     &att.DataURL,
 			Caption:     caption,
 		}
-		_, err = h.SendUsecase.SendFile(ctx, reqFile)
+		resp, err = h.SendUsecase.SendFile(ctx, reqFile)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent audio as file attachment to %s", phone)
 		}
-		return err
+		if err != nil {
+			return "", messageType, err
+		}
+		return resp.MessageID, messageType, nil
 
 	case "video":
+		messageType = "video"
 		req := domainSend.VideoRequest{
 			BaseRequest: domainSend.BaseRequest{Phone: phone},
 			Caption:     caption,
 			VideoURL:    &att.DataURL,
 		}
-		_, err := h.SendUsecase.SendVideo(ctx, req)
+		resp, err := h.SendUsecase.SendVideo(ctx, req)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent video attachment to %s", phone)
+			return resp.MessageID, messageType, nil
 		}
-		return err
+		return "", messageType, err
 
 	default:
+		messageType = "file"
 		req := domainSend.FileRequest{
 			BaseRequest: domainSend.BaseRequest{Phone: phone},
 			FileURL:     &att.DataURL,
 			Caption:     caption,
 		}
-		_, err := h.SendUsecase.SendFile(ctx, req)
+		resp, err := h.SendUsecase.SendFile(ctx, req)
 		if err == nil {
 			logrus.Infof("Chatwoot Webhook: Sent file attachment to %s", phone)
+			return resp.MessageID, messageType, nil
 		}
-		return err
+		return "", messageType, err
 	}
 }
 

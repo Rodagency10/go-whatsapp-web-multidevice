@@ -62,6 +62,11 @@ type IChatStorageRepository interface {
 	DeleteChatwootConfig(deviceID string) error
 	ListChatwootConfigs() ([]*ChatwootConfig, error)
 
+	// Chatwoot message correlation (outbound webhook → WhatsApp)
+	SaveChatwootMessageLink(link *ChatwootMessageLink) error
+	GetChatwootMessageLinkByChatwootID(deviceID string, chatwootMessageID int) (*ChatwootMessageLink, error)
+	UpdateChatwootMessageLink(link *ChatwootMessageLink) error
+
 	// Schema operations
 	InitializeSchema() error
 }

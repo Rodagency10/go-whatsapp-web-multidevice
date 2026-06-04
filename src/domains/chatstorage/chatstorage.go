@@ -63,6 +63,32 @@ type MediaInfo struct {
 	FileLength    uint64
 }
 
+// ChatwootMessageLink correlates a Chatwoot outbound message with a WhatsApp message.
+type ChatwootMessageLink struct {
+	DeviceID          string    `db:"device_id"`
+	InboxID           int       `db:"inbox_id"`
+	ChatwootMessageID int       `db:"chatwoot_message_id"`
+	WhatsAppMessageID string    `db:"whatsapp_message_id"`
+	ChatJID           string    `db:"chat_jid"`
+	MessageType       string    `db:"message_type"`
+	LastContent       string    `db:"last_content"`
+	ActionType        string    `db:"action_type"`
+	Status            string    `db:"status"`
+	CreatedAt         time.Time `db:"created_at"`
+	UpdatedAt         time.Time `db:"updated_at"`
+}
+
+const (
+	ChatwootLinkStatusActive  = "active"
+	ChatwootLinkStatusEdited  = "edited"
+	ChatwootLinkStatusRevoked = "revoked"
+	ChatwootLinkStatusFailed  = "failed"
+
+	ChatwootLinkActionCreated = "created"
+	ChatwootLinkActionUpdated = "updated"
+	ChatwootLinkActionDeleted = "deleted"
+)
+
 // ChatwootConfig stores per-device Chatwoot integration settings.
 type ChatwootConfig struct {
 	DeviceID    string    `db:"device_id" json:"device_id"`

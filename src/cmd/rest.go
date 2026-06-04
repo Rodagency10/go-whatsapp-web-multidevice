@@ -84,7 +84,7 @@ func restServer(_ *cobra.Command, _ []string) {
 	cwRegistry := chatwoot.GetGlobalRegistry()
 
 	// Create Chatwoot handler with registry
-	chatwootHandler := rest.NewChatwootHandler(dm, chatStorageRepo, sendUsecase, cwRegistry)
+	chatwootHandler := rest.NewChatwootHandler(dm, chatStorageRepo, sendUsecase, messageUsecase, cwRegistry)
 
 	// Health check endpoint (public, no auth)
 	// Registered at root path (ignoring AppBasePath) to ensure fixed availability

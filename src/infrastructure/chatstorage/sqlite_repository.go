@@ -812,6 +812,10 @@ func (r *SQLiteRepository) DeleteDeviceData(deviceID string) error {
 		return fmt.Errorf("failed to delete device chats: %w", err)
 	}
 
+	if _, err := tx.Exec(`DELETE FROM chatwoot_message_links WHERE device_id = ?`, deviceID); err != nil {
+		return fmt.Errorf("failed to delete chatwoot message links: %w", err)
+	}
+
 	return tx.Commit()
 }
 
@@ -994,6 +998,110 @@ func (r *SQLiteRepository) DeleteChatwootConfig(deviceID string) error {
 	}
 	_, err := r.db.Exec("DELETE FROM chatwoot_configs WHERE device_id = ?", deviceID)
 	return err
+}
+
+// SaveChatwootMessageLink inserts or replaces a Chatwoot↔WhatsApp message correlation.
+func (r *SQLiteRepository) SaveChatwootMessageLink(link *domainChatStorage.ChatwootMessageLink) error {
+	if link == nil || strings.TrimSpace(link.DeviceID) == "" {
+		return fmt.Errorf("device_id is required")
+	}
+	if link.ChatwootMessageID <= 0 {
+		return fmt.Errorf("chatwoot_message_id must be positive")
+	}
+	if strings.TrimSpace(link.WhatsAppMessageID) == "" {
+		return fmt.Errorf("whatsapp_message_id is required")
+	}
+	if strings.TrimSpace(link.ChatJID) == "" {
+		return fmt.Errorf("chat_jid is required")
+	}
+
+	now := time.Now()
+	if link.CreatedAt.IsZero() {
+		link.CreatedAt = now
+	}
+	link.UpdatedAt = now
+	if link.Status == "" {
+		link.Status = domainChatStorage.ChatwootLinkStatusActive
+	}
+	if link.ActionType == "" {
+		link.ActionType = domainChatStorage.ChatwootLinkActionCreated
+	}
+	if link.MessageType == "" {
+		link.MessageType = "text"
+	}
+
+	_, err := r.db.Exec(`
+		INSERT INTO chatwoot_message_links (
+			device_id, inbox_id, chatwoot_message_id, whatsapp_message_id, chat_jid,
+			message_type, last_content, action_type, status, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(device_id, chatwoot_message_id) DO UPDATE SET
+			whatsapp_message_id = excluded.whatsapp_message_id,
+			chat_jid = excluded.chat_jid,
+			message_type = excluded.message_type,
+			last_content = excluded.last_content,
+			action_type = excluded.action_type,
+			status = excluded.status,
+			updated_at = excluded.updated_at
+	`, link.DeviceID, link.InboxID, link.ChatwootMessageID, link.WhatsAppMessageID, link.ChatJID,
+		link.MessageType, link.LastContent, link.ActionType, link.Status, link.CreatedAt, link.UpdatedAt)
+	return err
+}
+
+// GetChatwootMessageLinkByChatwootID returns the correlation for a Chatwoot message on a device.
+func (r *SQLiteRepository) GetChatwootMessageLinkByChatwootID(deviceID string, chatwootMessageID int) (*domainChatStorage.ChatwootMessageLink, error) {
+	if strings.TrimSpace(deviceID) == "" {
+		return nil, fmt.Errorf("device_id is required")
+	}
+	if chatwootMessageID <= 0 {
+		return nil, fmt.Errorf("chatwoot_message_id must be positive")
+	}
+
+	link := &domainChatStorage.ChatwootMessageLink{}
+	err := r.db.QueryRow(`
+		SELECT device_id, inbox_id, chatwoot_message_id, whatsapp_message_id, chat_jid,
+			message_type, last_content, action_type, status, created_at, updated_at
+		FROM chatwoot_message_links
+		WHERE device_id = ? AND chatwoot_message_id = ?
+		LIMIT 1
+	`, deviceID, chatwootMessageID).Scan(
+		&link.DeviceID, &link.InboxID, &link.ChatwootMessageID, &link.WhatsAppMessageID, &link.ChatJID,
+		&link.MessageType, &link.LastContent, &link.ActionType, &link.Status, &link.CreatedAt, &link.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return link, nil
+}
+
+// UpdateChatwootMessageLink updates status, content snapshot, and action for an existing link.
+func (r *SQLiteRepository) UpdateChatwootMessageLink(link *domainChatStorage.ChatwootMessageLink) error {
+	if link == nil || strings.TrimSpace(link.DeviceID) == "" {
+		return fmt.Errorf("device_id is required")
+	}
+	if link.ChatwootMessageID <= 0 {
+		return fmt.Errorf("chatwoot_message_id must be positive")
+	}
+
+	link.UpdatedAt = time.Now()
+	result, err := r.db.Exec(`
+		UPDATE chatwoot_message_links
+		SET whatsapp_message_id = ?, chat_jid = ?, message_type = ?, last_content = ?,
+			action_type = ?, status = ?, updated_at = ?
+		WHERE device_id = ? AND chatwoot_message_id = ?
+	`, link.WhatsAppMessageID, link.ChatJID, link.MessageType, link.LastContent,
+		link.ActionType, link.Status, link.UpdatedAt, link.DeviceID, link.ChatwootMessageID)
+	if err != nil {
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("chatwoot message link not found for device %s message %d", link.DeviceID, link.ChatwootMessageID)
+	}
+	return nil
 }
 
 // ListChatwootConfigs returns all Chatwoot configurations.
@@ -1935,5 +2043,26 @@ func (r *SQLiteRepository) getMigrations() []string {
 		`DROP TABLE IF EXISTS chatwoot_configs`,
 		`ALTER TABLE chatwoot_configs_new RENAME TO chatwoot_configs`,
 		`CREATE INDEX IF NOT EXISTS idx_chatwoot_configs_inbox ON chatwoot_configs(inbox_id)`,
+
+		// Migration 26: Chatwoot outbound message ↔ WhatsApp message correlation
+		`CREATE TABLE IF NOT EXISTS chatwoot_message_links (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			device_id TEXT NOT NULL,
+			inbox_id INTEGER NOT NULL,
+			chatwoot_message_id INTEGER NOT NULL,
+			whatsapp_message_id TEXT NOT NULL,
+			chat_jid TEXT NOT NULL,
+			message_type TEXT NOT NULL DEFAULT 'text',
+			last_content TEXT NOT NULL DEFAULT '',
+			action_type TEXT NOT NULL DEFAULT 'created',
+			status TEXT NOT NULL DEFAULT 'active',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(device_id, chatwoot_message_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_chatwoot_message_links_device ON chatwoot_message_links(device_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_chatwoot_message_links_inbox ON chatwoot_message_links(inbox_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_chatwoot_message_links_whatsapp ON chatwoot_message_links(whatsapp_message_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_chatwoot_message_links_status ON chatwoot_message_links(status)`,
 	}
 }

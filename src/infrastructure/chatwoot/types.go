@@ -44,16 +44,32 @@ type CreateMessageRequest struct {
 	Private     bool   `json:"private"`
 }
 
+type ContentAttributes struct {
+	Deleted bool `json:"deleted"`
+}
+
 type WebhookPayload struct {
-	ID           int                 `json:"id"`
-	Event        string              `json:"event"`
-	MessageType  string              `json:"message_type"`
-	Content      string              `json:"content"`
-	Private      bool                `json:"private"`
-	Account      Account             `json:"account"`
-	Conversation ConversationWebhook `json:"conversation"`
-	Sender       Contact             `json:"sender"`
-	Attachments  []Attachment        `json:"attachments"`
+	ID                      int                 `json:"id"`
+	Event                   string              `json:"event"`
+	MessageType             string              `json:"message_type"`
+	Content                 string              `json:"content"`
+	ProcessedMessageContent string              `json:"processed_message_content"`
+	Private                 bool                `json:"private"`
+	ContentAttributes       ContentAttributes   `json:"content_attributes"`
+	Account                 Account             `json:"account"`
+	Conversation            ConversationWebhook `json:"conversation"`
+	Sender                  Contact             `json:"sender"`
+	Attachments             []Attachment        `json:"attachments"`
+}
+
+// IsDeleted reports whether Chatwoot marked this message as deleted (via message_updated).
+func (p WebhookPayload) IsDeleted() bool {
+	return p.ContentAttributes.Deleted
+}
+
+// IsOutboundAgentMessage returns true for non-private outgoing agent messages.
+func (p WebhookPayload) IsOutboundAgentMessage() bool {
+	return p.MessageType == "outgoing" && !p.Private
 }
 
 type Attachment struct {
