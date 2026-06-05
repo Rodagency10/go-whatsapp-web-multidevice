@@ -526,17 +526,9 @@ func (c *Client) createMessageWithAttachments(endpoint, content, messageType str
 
 			fileName := filepath.Base(fp)
 			ext := filepath.Ext(fp)
+			mimeType := attachmentMIMEType(ext)
 
-			mimeType := mime.TypeByExtension(ext)
-			if mimeType == "" {
-				if ext == ".oga" {
-					mimeType = "audio/ogg"
-				} else {
-					mimeType = "application/octet-stream"
-				}
-			}
-
-			// Custom form part with correct Content-Type for Chatwoot to render images inline
+			// Custom form part with correct Content-Type for Chatwoot to render media inline
 			h := make(textproto.MIMEHeader)
 			h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="attachments[]"; filename="%s"`, fileName))
 			h.Set("Content-Type", mimeType)
@@ -580,4 +572,24 @@ func (c *Client) createMessageWithAttachments(endpoint, content, messageType str
 	}
 
 	return 0, nil
+}
+
+func attachmentMIMEType(ext string) string {
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		return mimeType
+	}
+
+	switch strings.ToLower(ext) {
+	case ".oga", ".ogg", ".opus":
+		return "audio/ogg"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".m4a":
+		return "audio/mp4"
+	case ".wav":
+		return "audio/wav"
+	default:
+		return "application/octet-stream"
+	}
 }
